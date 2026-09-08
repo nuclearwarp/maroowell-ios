@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @ObservedObject private var quantityStore = QuantityStore.shared
     let session: AppSession
 
     private let columns = [
@@ -12,9 +13,9 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 22) {
                     header
-                    quickSummary
+                    settlementHero
 
                     Text("업무 메뉴")
                         .font(.title3.weight(.black))
@@ -22,23 +23,23 @@ struct HomeView: View {
 
                     LazyVGrid(columns: columns, spacing: 14) {
                         NavigationLink {
-                            FeaturePlaceholderView(
+                            QuantityView()
+                        } label: {
+                            HomeMenuCard(
                                 title: "배송 수량 등록",
-                                subtitle: "Android의 수량 등록 기능을 iPhone 네이티브 화면으로 이식합니다.",
+                                subtitle: "라우트별 수량·단가와 일자별 예상소득",
                                 symbol: "shippingbox.fill"
                             )
-                        } label: {
-                            HomeMenuCard(title: "배송 수량 등록", subtitle: "라우트별 수량과 예상소득", symbol: "shippingbox.fill")
                         }
 
                         NavigationLink {
-                            FeaturePlaceholderView(
+                            QuantityStatsView(session: session)
+                        } label: {
+                            HomeMenuCard(
                                 title: "배송 통계",
-                                subtitle: "월별·정산월별 매출과 수량 통계를 이식합니다.",
+                                subtitle: "월별·정산월 일별 매출과 수량 추이",
                                 symbol: "chart.line.uptrend.xyaxis"
                             )
-                        } label: {
-                            HomeMenuCard(title: "배송 통계", subtitle: "월별·정산월별 추이", symbol: "chart.line.uptrend.xyaxis")
                         }
 
                         NavigationLink {
@@ -54,12 +55,12 @@ struct HomeView: View {
                         if session.isTeamLeader {
                             NavigationLink {
                                 FeaturePlaceholderView(
-                                    title: "마루웰 일정",
+                                    title: "입차 스케줄",
                                     subtitle: "팀장 권한 일정과 달력 기능을 연결합니다.",
                                     symbol: "calendar"
                                 )
                             } label: {
-                                HomeMenuCard(title: "마루웰 일정", subtitle: "스케줄과 달력 확인", symbol: "calendar")
+                                HomeMenuCard(title: "입차 스케줄", subtitle: "전체 라우트 입차 일정 조회 및 관리", symbol: "calendar")
                             }
                         }
 
@@ -87,8 +88,8 @@ struct HomeView: View {
                     .buttonStyle(.bordered)
                     .padding(.top, 8)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
+                .padding(.horizontal, 18)
+                .padding(.top, 16)
                 .padding(.bottom, 40)
             }
             .background(MaroowellTheme.background)
@@ -98,9 +99,21 @@ struct HomeView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Text("마루웰")
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(MaroowellTheme.deepYellow)
+                    Text("v1.0")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(MaroowellTheme.muted)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(Color.white, in: Capsule())
+                }
+
                 Text("안녕하세요, \(session.displayName)님")
-                    .font(.system(size: 28, weight: .black, design: .rounded))
+                    .font(.system(size: 27, weight: .black, design: .rounded))
                     .foregroundStyle(MaroowellTheme.ink)
                 Text("오늘도 안전하고 좋은 하루 보내세요 💛")
                     .font(.subheadline.weight(.medium))
@@ -112,34 +125,69 @@ struct HomeView: View {
         }
     }
 
-    private var quickSummary: some View {
-        HStack(spacing: 0) {
-            summaryItem(title: "권한", value: roleLabel)
-            Divider().frame(height: 42)
-            summaryItem(title: "소속", value: session.isMaroowell ? "마루웰" : "협력")
-            Divider().frame(height: 42)
-            summaryItem(title: "상태", value: "승인")
+    private var settlementHero: some View {
+        let summary = quantityStore.settlementSummary(anchor: .now)
+        let counts = quantityStore.settlementCounts(anchor: .now)
+        let average = summary.days > 0 ? summary.total / Int64(summary.days) : 0
+        let projectedDays = max(summary.days, 20)
+        let projected = summary.days > 0 ? average * Int64(projectedDays) : 0
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("\(summary.startDate.compactMD) ~ \(summary.endDate.compactMD)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.78))
+                Spacer()
+            }
+
+            HStack(spacing: 14) {
+                heroMetric(title: "누적 정산액", value: summary.total.krw, detail: "배송 \(counts.delivery) · 반품 \(counts.returns) · 프백 \(counts.freshbag)")
+                Rectangle()
+                    .fill(Color.white.opacity(0.24))
+                    .frame(width: 1, height: 68)
+                heroMetric(title: "예상 정산액", value: projected.krw, detail: "평균 \(average.krw) · 예상근무 \(projectedDays)일")
+            }
+
+            HStack {
+                Image(systemName: "calendar.badge.clock")
+                Text("이번 정산 등록 \(summary.days)일")
+                Spacer()
+                Text(roleLabel)
+            }
+            .font(.caption.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(Color.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .padding(.vertical, 18)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(MaroowellTheme.border.opacity(0.75), lineWidth: 1)
-        }
+        .padding(18)
+        .background(
+            LinearGradient(
+                colors: [Color(red: 0.19, green: 0.35, blue: 0.39), Color(red: 0.26, green: 0.47, blue: 0.50)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+        )
     }
 
-    private func summaryItem(title: String, value: String) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.subheadline.weight(.black))
-                .foregroundStyle(MaroowellTheme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+    private func heroMetric(title: String, value: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption)
-                .foregroundStyle(MaroowellTheme.muted)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white.opacity(0.76))
+            Text(value)
+                .font(.system(size: 22, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.68)
+            Text(detail)
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.74))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var roleLabel: String {
@@ -186,5 +234,16 @@ private struct HomeMenuCard: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(MaroowellTheme.border.opacity(0.75), lineWidth: 1)
         }
+    }
+}
+
+private extension Date {
+    var compactMD: String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+        formatter.dateFormat = "MM.dd"
+        return formatter.string(from: self)
     }
 }
