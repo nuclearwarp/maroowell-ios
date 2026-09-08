@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @ObservedObject private var quantityStore = QuantityStore.shared
+    @ObservedObject private var inspectionStore = InspectionStore.shared
     let session: AppSession
 
     private let columns = [
@@ -43,13 +44,13 @@ struct HomeView: View {
                         }
 
                         NavigationLink {
-                            FeaturePlaceholderView(
-                                title: "일상점검",
-                                subtitle: "운수종사자 일상점검 화면을 iPhone에 맞게 구현합니다.",
-                                symbol: "checkmark.shield.fill"
-                            )
+                            DailyInspectionView()
                         } label: {
-                            HomeMenuCard(title: "일상점검", subtitle: "오늘 점검을 빠르게 등록", symbol: "checkmark.shield.fill")
+                            HomeMenuCard(
+                                title: "일상점검",
+                                subtitle: inspectionStore.hasDay(Date()) ? "오늘 점검 완료 · 월간 PDF 지원" : "오늘 점검 미완료 · 바로 등록",
+                                symbol: inspectionStore.hasDay(Date()) ? "checkmark.shield.fill" : "shield.lefthalf.filled"
+                            )
                         }
 
                         if session.isTeamLeader {
