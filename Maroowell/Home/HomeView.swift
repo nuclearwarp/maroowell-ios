@@ -55,7 +55,7 @@ struct HomeView: View {
 
                         if session.isTeamLeader {
                             NavigationLink {
-                                ScheduleView(session: session)
+                                ScheduleView()
                             } label: {
                                 HomeMenuCard(title: "입차 스케줄", subtitle: "전체 라우트 입차 일정 조회 및 관리", symbol: "calendar")
                             }
