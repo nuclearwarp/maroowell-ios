@@ -55,11 +55,7 @@ struct HomeView: View {
 
                         if session.isTeamLeader {
                             NavigationLink {
-                                FeaturePlaceholderView(
-                                    title: "입차 스케줄",
-                                    subtitle: "팀장 권한 일정과 달력 기능을 연결합니다.",
-                                    symbol: "calendar"
-                                )
+                                ScheduleView()
                             } label: {
                                 HomeMenuCard(title: "입차 스케줄", subtitle: "전체 라우트 입차 일정 조회 및 관리", symbol: "calendar")
                             }
