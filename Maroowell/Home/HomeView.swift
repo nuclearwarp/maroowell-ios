@@ -99,6 +99,9 @@ struct HomeView: View {
         case .metaRealtime:
             NavigationLink { MetaRealtimeShareView() } label: { HomeMenuRow(item: item, badge: "팀장") }
                 .buttonStyle(.plain)
+        case .maroowellInfo:
+            NavigationLink { MaroowellInfoView() } label: { HomeMenuRow(item: item, badge: "관리자") }
+                .buttonStyle(.plain)
         case .web(let path):
             NavigationLink {
                 MaroowellWebView(title: item.title, path: path)
@@ -290,9 +293,11 @@ struct HomeView: View {
         if session.canView(AppAccessPolicy.metaRealtimePath) {
             items.append(.init(tab: .status, title: "실시간 배송 현황", subtitle: "META 라우트 스캔 · 오스캔 자동 확인", symbol: "dot.radiowaves.left.and.right", destination: .metaRealtime))
         }
+        if session.canView("/maroowell_info") {
+            items.append(.init(tab: .more, title: "마루웰 정보", subtitle: "인원 기본정보 조회 · 수정 · 추가", symbol: "building.2.fill", destination: .maroowellInfo))
+        }
 
         let webItems: [(HomeTab, String, String, String, String)] = [
-            (.more, "마루웰 정보", "마루웰 기본 정보", "building.2.fill", "/maroowell_info"),
             (.more, "우편번호 검색", "주소·지도 빠른 조회", "mappin.and.ellipse", "/zipcode_search"),
             (.more, "라우트 편집기", "라우트·벤더·입차지 편집", "point.3.connected.trianglepath.dotted", "/coupangRouteMap.html"),
             (.status, "쿠팡 캠프 조회", "캠프 및 주소 조회", "building.fill", "/coupang_camp"),
@@ -367,6 +372,7 @@ private enum HomeMenuDestination {
     case inspection
     case schedule
     case metaRealtime
+    case maroowellInfo
     case web(String)
     case placeholder(String)
 }
