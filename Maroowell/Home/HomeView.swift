@@ -97,7 +97,7 @@ struct HomeView: View {
             NavigationLink { ScheduleView() } label: { HomeMenuRow(item: item, badge: "팀장") }
                 .buttonStyle(.plain)
         case .metaRealtime:
-            NavigationLink { MetaRealtimeView() } label: { HomeMenuRow(item: item, badge: "팀장") }
+            NavigationLink { MetaRealtimeShareView() } label: { HomeMenuRow(item: item, badge: "팀장") }
                 .buttonStyle(.plain)
         case .web(let path):
             NavigationLink {
