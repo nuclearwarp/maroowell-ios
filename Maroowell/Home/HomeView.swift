@@ -108,6 +108,9 @@ struct HomeView: View {
         case .freshbagRatio:
             NavigationLink { FreshbagRatioView(session: session) } label: { HomeMenuRow(item: item, badge: "마루웰") }
                 .buttonStyle(.plain)
+        case .accountStats:
+            NavigationLink { AccountStatsView(session: session) } label: { HomeMenuRow(item: item, badge: "팀장") }
+                .buttonStyle(.plain)
         case .web(let path):
             NavigationLink {
                 MaroowellWebView(title: item.title, path: path)
@@ -305,6 +308,9 @@ struct HomeView: View {
         if session.canView("/maroowell_freshbag_ratio") {
             items.append(.init(tab: .status, title: "마루웰 회수율", subtitle: "월 누적 · 주차별 일자 회수율", symbol: "percent", destination: .freshbagRatio))
         }
+        if session.canView("/maroowell_account") {
+            items.append(.init(tab: .status, title: "통계조회", subtitle: "배송·반품 통계 조회", symbol: "chart.bar.xaxis", destination: .accountStats))
+        }
         if session.canView("/maroowell_info") {
             items.append(.init(tab: .more, title: "마루웰 정보", subtitle: "인원 기본정보 조회 · 수정 · 추가", symbol: "building.2.fill", destination: .maroowellInfo))
         }
@@ -316,7 +322,6 @@ struct HomeView: View {
             (.status, "클렌징 히스토리", "클렌징 기록 조회", "clock.arrow.circlepath", "/cleansing_history"),
             (.status, "마루웰 라우트정보", "라우트 상세·지도·배송 포인트", "map.fill", "/maroowell_route_info"),
             (.more, "마루웰 라우트 단가", "라우트 단가·주소·원청 관리", "wonsign.circle.fill", "/maroowell_route"),
-            (.status, "통계조회", "배송·반품 통계 조회", "chart.bar.xaxis", "/maroowell_account"),
             (.more, "용차", "용차 운영 관리", "truck.box.fill", "/dragon_car_index"),
             (.more, "용차 스케줄", "기사 출근·휴무 일정", "calendar.badge.clock", "/dragon_car_schedule"),
             (.more, "관리자 권한 관리", "사용자·관리자 권한 관리", "person.badge.key.fill", "/admin_access.html"),
@@ -385,6 +390,7 @@ private enum HomeMenuDestination {
     case maroowellInfo
     case campLookup
     case freshbagRatio
+    case accountStats
     case web(String)
     case placeholder(String)
 }
