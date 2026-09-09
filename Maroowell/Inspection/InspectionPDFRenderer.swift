@@ -8,8 +8,7 @@ struct InspectionPDFRenderer {
         records: [Int: InspectionDayRecord],
         signature: InspectionSignature
     ) throws -> URL {
-        let store = InspectionStore.shared
-        let monthKey = store.monthKey(for: month)
+        let monthKey = monthKey(for: month)
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("운수종사자_일상점검표_\(monthKey).pdf")
 
@@ -80,6 +79,14 @@ struct InspectionPDFRenderer {
         return url
     }
 
+    private static func monthKey(for date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "ko_KR")
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+        let comps = calendar.dateComponents([.year, .month], from: date)
+        return String(format: "%04d-%02d", comps.year ?? 0, comps.month ?? 0)
+    }
+
     private static func drawLabelValue(_ label: String, _ value: String, x: CGFloat, y: CGFloat, width: CGFloat) {
         drawText(label, rect: CGRect(x: x, y: y, width: width * 0.38, height: 24), font: .boldSystemFont(ofSize: 9), alignment: .left)
         drawText(value, rect: CGRect(x: x + width * 0.38, y: y, width: width * 0.62, height: 24), font: .systemFont(ofSize: 9), alignment: .left)
@@ -105,9 +112,15 @@ struct InspectionPDFRenderer {
         for stroke in signature.strokes where stroke.count > 1 {
             guard let first = stroke.first else { continue }
             context.beginPath()
-            context.move(to: CGPoint(x: rect.minX + first.x * rect.width, y: rect.minY + first.y * rect.height))
+            context.move(to: CGPoint(
+                x: rect.minX + CGFloat(first.x) * rect.width,
+                y: rect.minY + CGFloat(first.y) * rect.height
+            ))
             for point in stroke.dropFirst() {
-                context.addLine(to: CGPoint(x: rect.minX + point.x * rect.width, y: rect.minY + point.y * rect.height))
+                context.addLine(to: CGPoint(
+                    x: rect.minX + CGFloat(point.x) * rect.width,
+                    y: rect.minY + CGFloat(point.y) * rect.height
+                ))
             }
             context.strokePath()
         }
