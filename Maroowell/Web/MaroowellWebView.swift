@@ -97,7 +97,7 @@ private struct MaroowellWKWebView: UIViewRepresentable {
         (function() {
           function tune() {
             try {
-              const path = location.pathname.replace(/\/$/, '') || '/';
+              const path = (location.pathname.endsWith('/') ? location.pathname.slice(0, -1) : location.pathname) || '/';
               let css = '';
               if (path === '/zipcode_search') css += 'header .brand,header .titleGroup{display:none!important}header{min-height:44px!important;height:auto!important;padding:6px 10px!important}';
               if (path === '/coupangRouteMap.html') css += '.title>a,.titleText{display:none!important}';
