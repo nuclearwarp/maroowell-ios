@@ -105,6 +105,9 @@ struct HomeView: View {
         case .campLookup:
             NavigationLink { CampLookupView(session: session) } label: { HomeMenuRow(item: item, badge: "팀장") }
                 .buttonStyle(.plain)
+        case .freshbagRatio:
+            NavigationLink { FreshbagRatioView(session: session) } label: { HomeMenuRow(item: item, badge: "마루웰") }
+                .buttonStyle(.plain)
         case .web(let path):
             NavigationLink {
                 MaroowellWebView(title: item.title, path: path)
@@ -299,6 +302,9 @@ struct HomeView: View {
         if session.canView("/coupang_camp") {
             items.append(.init(tab: .status, title: "쿠팡 캠프 조회", subtitle: "유형별 요약 · 검색 · 지도", symbol: "building.fill", destination: .campLookup))
         }
+        if session.canView("/maroowell_freshbag_ratio") {
+            items.append(.init(tab: .status, title: "마루웰 회수율", subtitle: "월 누적 · 주차별 일자 회수율", symbol: "percent", destination: .freshbagRatio))
+        }
         if session.canView("/maroowell_info") {
             items.append(.init(tab: .more, title: "마루웰 정보", subtitle: "인원 기본정보 조회 · 수정 · 추가", symbol: "building.2.fill", destination: .maroowellInfo))
         }
@@ -309,7 +315,6 @@ struct HomeView: View {
             (.status, "프백 현황", "프레시백 현황 조회", "shippingbox.and.arrow.backward.fill", "/coupang_freshbag"),
             (.status, "클렌징 히스토리", "클렌징 기록 조회", "clock.arrow.circlepath", "/cleansing_history"),
             (.status, "마루웰 라우트정보", "라우트 상세·지도·배송 포인트", "map.fill", "/maroowell_route_info"),
-            (.status, "마루웰 회수율", "프레시백 회수율 조회", "percent", "/maroowell_freshbag_ratio"),
             (.more, "마루웰 라우트 단가", "라우트 단가·주소·원청 관리", "wonsign.circle.fill", "/maroowell_route"),
             (.status, "통계조회", "배송·반품 통계 조회", "chart.bar.xaxis", "/maroowell_account"),
             (.more, "용차", "용차 운영 관리", "truck.box.fill", "/dragon_car_index"),
@@ -379,6 +384,7 @@ private enum HomeMenuDestination {
     case metaRealtime
     case maroowellInfo
     case campLookup
+    case freshbagRatio
     case web(String)
     case placeholder(String)
 }
