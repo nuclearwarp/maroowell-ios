@@ -107,9 +107,9 @@ struct DragonScheduleView: View {
     func cycle(driver: DragonScheduleDriver, date: String) {
         let current=status(driver:driver,date:date)
         let next: DragonScheduleStage
-        if current.label == "여유" { next=.init(driver:driver,date:date,status:"출근",deleted:false) }
-        else if current.label == "출근" { next=.init(driver:driver,date:date,status:"휴무",deleted:false) }
-        else { next=.init(driver:driver,date:date,status:"",deleted:true) }
+        if current.label == "여유" { next = .init(driver:driver,date:date,status:"출근",deleted:false) }
+        else if current.label == "출근" { next = .init(driver:driver,date:date,status:"휴무",deleted:false) }
+        else { next = .init(driver:driver,date:date,status:"",deleted:true) }
         staged[key(driver,date)] = next
     }
     func save() async {
@@ -152,7 +152,7 @@ private struct DragonScheduleAPI {
         return .init(drivers:ds,manual:manual,normal:normal,records:rs)
     }
     func save(_ stages:[DragonScheduleStage],weekStart:Date) async throws {
-        let auth=try await client.auth.session; let rows:[[String:Any]]=stages.map { s in ["schedule_date":s.date,"camp":"용차","wave":"WAVE2","route_label":s.driver.key,"driver_name":s.deleted ? NSNull():s.driver.name,"driver_display_name":s.deleted ? NSNull():s.driver.name,"driver_owner_name":s.deleted ? NSNull():s.driver.name,"driver_export_name":s.deleted ? NSNull():s.driver.name,"driver_coupang_id":s.deleted || s.driver.coupangID.isEmpty ? NSNull():s.driver.coupangID,"driver_account_type":s.deleted ? NSNull():s.status,"memo":NSNull(),"row_order":Int(s.driver.pk),"cell_color":NSNull(),"is_active":!s.deleted,"deleted":s.deleted] ]
+        let auth=try await client.auth.session; let rows:[[String:Any]]=stages.map { s in ["schedule_date":s.date,"camp":"용차","wave":"WAVE2","route_label":s.driver.key,"driver_name":s.deleted ? NSNull():s.driver.name,"driver_display_name":s.deleted ? NSNull():s.driver.name,"driver_owner_name":s.deleted ? NSNull():s.driver.name,"driver_export_name":s.deleted ? NSNull():s.driver.name,"driver_coupang_id":s.deleted || s.driver.coupangID.isEmpty ? NSNull():s.driver.coupangID,"driver_account_type":s.deleted ? NSNull():s.status,"memo":NSNull(),"row_order":Int(s.driver.pk),"cell_color":NSNull(),"is_active":!s.deleted,"deleted":s.deleted] }
         var r=URLRequest(url:URL(string:"https://schedule.maroowell.com/schedule/save")!);r.httpMethod="POST";r.timeoutInterval=30;r.setValue("application/json",forHTTPHeaderField:"Content-Type");r.setValue("Bearer \(auth.accessToken)",forHTTPHeaderField:"Authorization");r.httpBody=try JSONSerialization.data(withJSONObject:["rows":rows]);let (_,res)=try await URLSession.shared.data(for:r);guard let h=res as? HTTPURLResponse,(200..<300).contains(h.statusCode) else{throw NSError(domain:"DragonSchedule",code:1,userInfo:[NSLocalizedDescriptionKey:"스케줄 저장 실패"])}
     }
     private func table(_ name:String,query:String) async throws -> [[String:Any]] { var c=URLComponents(url:AppConfig.supabaseURL.appendingPathComponent("rest/v1/\(name)"),resolvingAgainstBaseURL:false)!;c.query=query;let auth=try await client.auth.session;var r=URLRequest(url:c.url!);r.setValue("application/json",forHTTPHeaderField:"Accept");r.setValue(AppConfig.supabasePublishableKey,forHTTPHeaderField:"apikey");r.setValue("Bearer \(auth.accessToken)",forHTTPHeaderField:"Authorization");let(d,res)=try await URLSession.shared.data(for:r);guard let h=res as? HTTPURLResponse,(200..<300).contains(h.statusCode) else{throw NSError(domain:"DragonSchedule",code:1,userInfo:[NSLocalizedDescriptionKey:"용차 스케줄 조회 실패"])};return try JSONSerialization.jsonObject(with:d) as? [[String:Any]] ?? [] }
