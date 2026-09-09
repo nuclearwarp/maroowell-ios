@@ -5,6 +5,7 @@ enum AppAccessPolicy {
     static let metaRealtimePath = "local://meta-realtime"
     static let pushPath = "/maroowell_push"
     static let accountStatsPath = "/maroowell_account"
+    static let campMapPath = "/coupang_camp_map"
 
     static func visiblePaths(
         isMaroowell: Bool,
@@ -25,6 +26,7 @@ enum AppAccessPolicy {
                 "/zipcode_search",
                 "/coupangRouteMap.html",
                 "/coupang_camp",
+                campMapPath,
                 "/coupang_freshbag",
                 schedulePath,
                 accountStatsPath,
@@ -64,7 +66,7 @@ enum AppAccessPolicy {
 
     static func permissionBadge(for path: String, session: AppSession) -> String? {
         switch basePath(path) {
-        case schedulePath, accountStatsPath, pushPath, metaRealtimePath:
+        case schedulePath, accountStatsPath, pushPath, metaRealtimePath, campMapPath:
             return "팀장"
         case "/maroowell_info", "/maroowell_route":
             return "관리자"
