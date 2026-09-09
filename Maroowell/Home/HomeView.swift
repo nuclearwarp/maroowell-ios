@@ -4,6 +4,7 @@ struct HomeView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @ObservedObject private var quantityStore = QuantityStore.shared
     @ObservedObject private var inspectionStore = InspectionStore.shared
+    @StateObject private var homeScheduleStore = HomeScheduleStore()
     let session: AppSession
 
     private let columns = [
@@ -17,6 +18,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     header
                     settlementHero
+                    HomeCalendarView(scheduleStore: homeScheduleStore)
 
                     Text("업무 메뉴")
                         .font(.title3.weight(.black))
