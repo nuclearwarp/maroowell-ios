@@ -24,8 +24,8 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install build tools
+        run: brew install xcodegen imagemagick
 
       - name: Configure App Store Connect API key
         env:
@@ -45,42 +45,14 @@ jobs:
           set -euo pipefail
           ICON_DIR="Maroowell/Resources/Assets.xcassets/AppIcon.appiconset"
           mkdir -p "$ICON_DIR"
-          cat > "$RUNNER_TEMP/make_icon.swift" <<'SWIFT'
-          import AppKit
-
-          let output = CommandLine.arguments[1]
-          let width = 1024
-          let height = 1024
-          guard let bitmap = NSBitmapImageRep(
-              bitmapDataPlanes: nil,
-              pixelsWide: width,
-              pixelsHigh: height,
-              bitsPerSample: 8,
-              samplesPerPixel: 3,
-              hasAlpha: false,
-              isPlanar: false,
-              colorSpaceName: .deviceRGB,
-              bytesPerRow: 0,
-              bitsPerPixel: 0
-          ) else { exit(1) }
-          guard let context = NSGraphicsContext(bitmapImageRep: bitmap) else { exit(1) }
-          NSGraphicsContext.saveGraphicsState()
-          NSGraphicsContext.current = context
-          NSColor.white.setFill()
-          NSRect(x: 0, y: 0, width: width, height: height).fill()
-          let paragraph = NSMutableParagraphStyle()
-          paragraph.alignment = .center
-          let attributes: [NSAttributedString.Key: Any] = [
-              .font: NSFont.systemFont(ofSize: 330, weight: .black),
-              .foregroundColor: NSColor(calibratedRed: 0.76, green: 0.08, blue: 0.11, alpha: 1.0),
-              .paragraphStyle: paragraph
-          ]
-          "MW".draw(in: NSRect(x: 0, y: 335, width: width, height: 400), withAttributes: attributes)
-          NSGraphicsContext.restoreGraphicsState()
-          guard let png = bitmap.representation(using: .png, properties: [:]) else { exit(1) }
-          try png.write(to: URL(fileURLWithPath: output))
-          SWIFT
-          swift "$RUNNER_TEMP/make_icon.swift" "$ICON_DIR/AppIcon.png"
+          magick -size 1024x1024 canvas:white \
+            -fill '#C2141C' \
+            -gravity center \
+            -font Helvetica-Bold \
+            -pointsize 330 \
+            -annotate +0+0 'MW' \
+            -alpha off \
+            "$ICON_DIR/AppIcon.png"
           sips -g pixelWidth -g pixelHeight -g hasAlpha "$ICON_DIR/AppIcon.png"
           cat > "$ICON_DIR/Contents.json" <<'JSON'
           {
