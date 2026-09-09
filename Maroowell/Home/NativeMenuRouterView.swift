@@ -8,9 +8,11 @@ struct NativeMenuRouterView: View {
     var body: some View {
         switch AppAccessPolicy.basePath(path) {
         case "/zipcode_search":
-            ZipcodeSearchView(session: session)
+            ZipcodeBoundaryMapView(session: session)
         case "/coupangRouteMap.html":
-            RouteEditorView(session: session)
+            RouteEditorMapWorkspace(session: session)
+        case "/coupang_camp":
+            CampMapView(session: session)
         case "/coupang_freshbag":
             FreshbagStatusView(session: session)
         case "/cleansing_history":
