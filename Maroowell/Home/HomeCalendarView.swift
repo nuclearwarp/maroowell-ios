@@ -4,6 +4,8 @@ struct HomeCalendarView: View {
     @ObservedObject var scheduleStore: HomeScheduleStore
     @ObservedObject private var inspectionStore = InspectionStore.shared
     @ObservedObject private var quantityStore = QuantityStore.shared
+    @ObservedObject private var memoStore = HomeCalendarMemoStore.shared
+    @StateObject private var holidayStore = HomeHolidayStore()
 
     @State private var anchorMonth: Date
     @State private var selectedDate: Date?
@@ -35,11 +37,19 @@ struct HomeCalendarView: View {
                     Text(errorMessage)
                     Spacer()
                     Button("재조회") {
-                        Task { await loadSchedule(force: true) }
+                        Task { await loadCalendarData(force: true) }
                     }
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.red)
+            } else if let holidayError = holidayStore.errorMessage {
+                HStack(spacing: 7) {
+                    Image(systemName: "calendar.badge.exclamationmark")
+                    Text(holidayError)
+                    Spacer()
+                }
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(MaroowellTheme.muted)
             }
         }
         .padding(14)
@@ -49,13 +59,14 @@ struct HomeCalendarView: View {
                 .stroke(MaroowellTheme.border.opacity(0.75), lineWidth: 1)
         }
         .task(id: periodKey) {
-            await loadSchedule()
+            await loadCalendarData()
         }
         .sheet(isPresented: $showDaySheet) {
             if let selectedDate {
                 HomeCalendarDaySheet(
                     date: selectedDate,
-                    entries: scheduleStore.entries(for: selectedDate)
+                    entries: scheduleStore.entries(for: selectedDate),
+                    holidayName: holidayStore.holiday(for: selectedDate)
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -122,7 +133,7 @@ struct HomeCalendarView: View {
             Text("\(HomeSettlementCalendarPolicy.dayNumber(day.date))")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(MaroowellTheme.muted.opacity(0.42))
-                .frame(maxWidth: .infinity, minHeight: 70, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
                 .padding(.top, 6)
                 .padding(.leading, 6)
         }
@@ -138,12 +149,14 @@ struct HomeCalendarView: View {
         let amount = quantityStore.load(day.date).map(quantityStore.amount(of:))
         let routeText = calendarRouteText(entries)
         let isToday = HomeSettlementCalendarPolicy.isToday(day.date)
+        let holidayName = holidayStore.holiday(for: day.date)
+        let memoText = memoStore.memo(for: day.date)
 
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 2) {
                 Text("\(HomeSettlementCalendarPolicy.dayNumber(day.date))")
                     .font(.system(size: 11, weight: .black))
-                    .foregroundStyle(HomeSettlementCalendarPolicy.isSunday(day.date) ? Color.red.opacity(0.8) : MaroowellTheme.ink)
+                    .foregroundStyle(dayNumberColor(day.date, holidayName: holidayName))
                 Spacer(minLength: 0)
                 if quantityStore.hasRecord(day.date) {
                     Circle()
@@ -152,12 +165,20 @@ struct HomeCalendarView: View {
                 }
             }
 
+            if !holidayName.isEmpty {
+                Text(holidayName)
+                    .font(.system(size: 6.8, weight: .black))
+                    .foregroundStyle(Color.red)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
+            }
+
             Text(routeText)
                 .font(.system(size: 8.2, weight: .black))
                 .foregroundStyle(scheduleColor(hasDay: hasDay, hasNight: hasNight))
                 .lineLimit(2)
                 .minimumScaleFactor(0.68)
-                .frame(maxWidth: .infinity, minHeight: 21, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: 18, alignment: .topLeading)
 
             if let amount {
                 Text(amount.compactKRW)
@@ -176,9 +197,16 @@ struct HomeCalendarView: View {
                 .foregroundStyle(inspectionDone ? Color.green : Color.red)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
+
+            if !memoText.isEmpty {
+                Text("메모 O")
+                    .font(.system(size: 7.2, weight: .black))
+                    .foregroundStyle(Color.blue)
+                    .lineLimit(1)
+            }
         }
         .padding(6)
-        .frame(maxWidth: .infinity, minHeight: 70, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
         .background(dayBackground(hasDay: hasDay, hasNight: hasNight, isToday: isToday), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -187,20 +215,21 @@ struct HomeCalendarView: View {
     }
 
     private var legend: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             legendItem("주간", color: Color(red: 0.09, green: 0.54, blue: 0.29))
             legendItem("야간", color: Color(red: 0.44, green: 0.28, blue: 0.66))
             legendItem("점검완료", color: .green)
+            legendItem("공휴일", color: .red)
             Spacer(minLength: 0)
-            if scheduleStore.isLoading { ProgressView().controlSize(.small) }
+            if scheduleStore.isLoading || holidayStore.isLoading { ProgressView().controlSize(.small) }
         }
     }
 
     private func legendItem(_ title: String, color: Color) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 6, height: 6)
+        HStack(spacing: 3) {
+            Circle().fill(color).frame(width: 5, height: 5)
             Text(title)
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: 8.5, weight: .bold))
                 .foregroundStyle(MaroowellTheme.muted)
         }
     }
@@ -218,6 +247,12 @@ struct HomeCalendarView: View {
         if hasNight { return Color(red: 0.44, green: 0.28, blue: 0.66) }
         if hasDay { return Color(red: 0.09, green: 0.54, blue: 0.29) }
         return MaroowellTheme.muted
+    }
+
+    private func dayNumberColor(_ date: Date, holidayName: String) -> Color {
+        if !holidayName.isEmpty || HomeSettlementCalendarPolicy.isSunday(date) { return .red }
+        if HomeSettlementCalendarPolicy.isSaturday(date) { return .blue }
+        return MaroowellTheme.ink
     }
 
     private func calendarRouteText(_ entries: [HomePersonalScheduleEntry]) -> String {
@@ -241,8 +276,9 @@ struct HomeCalendarView: View {
         return "\(ScheduleDatePolicy.iso(period.start))|\(ScheduleDatePolicy.iso(period.end))"
     }
 
-    private func loadSchedule(force: Bool = false) async {
+    private func loadCalendarData(force: Bool = false) async {
         await scheduleStore.load(dates: visibleDays.map(\.date), force: force)
+        await holidayStore.load(dates: visibleDays.map(\.date), force: force)
     }
 }
 
@@ -250,14 +286,20 @@ private struct HomeCalendarDaySheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var inspectionStore = InspectionStore.shared
     @ObservedObject private var quantityStore = QuantityStore.shared
+    @ObservedObject private var memoStore = HomeCalendarMemoStore.shared
 
     let date: Date
     let entries: [HomePersonalScheduleEntry]
+    let holidayName: String
+
+    @State private var showMemoEditor = false
+    @State private var memoDraft = ""
 
     private var activeEntries: [HomePersonalScheduleEntry] { entries.filter { !$0.isOff } }
     private var inspectionDone: Bool { inspectionStore.hasDay(date) }
     private var isFuture: Bool { HomeSettlementCalendarPolicy.isFuture(date) }
     private var quantityRecord: QuantityRecord? { quantityStore.load(date) }
+    private var memoText: String { memoStore.memo(for: date) }
 
     var body: some View {
         NavigationStack {
@@ -267,6 +309,11 @@ private struct HomeCalendarDaySheet: View {
                         Text(HomeSettlementCalendarPolicy.fullDate(date))
                             .font(.title2.weight(.black))
                             .foregroundStyle(MaroowellTheme.ink)
+                        if !holidayName.isEmpty {
+                            Text(holidayName)
+                                .font(.subheadline.weight(.black))
+                                .foregroundStyle(.red)
+                        }
                         Text(statusText)
                             .font(.caption.weight(.black))
                             .foregroundStyle(statusColor)
@@ -285,15 +332,6 @@ private struct HomeCalendarDaySheet: View {
                         }
                         .padding(14)
                         .background(MaroowellTheme.yellow.opacity(0.11), in: RoundedRectangle(cornerRadius: 16))
-
-                        if !record.memo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text("메모  \(record.memo.trimmingCharacters(in: .whitespacesAndNewlines))")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Color.blue)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(12)
-                                .background(Color.blue.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
-                        }
                     }
 
                     if !entries.isEmpty {
@@ -315,9 +353,31 @@ private struct HomeCalendarDaySheet: View {
                         }
                     }
 
+                    if !memoText.isEmpty {
+                        Text("메모  \(memoText)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.blue)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(Color.blue.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                    }
+
+                    Button {
+                        memoDraft = memoText
+                        showMemoEditor = true
+                    } label: {
+                        Label(memoText.isEmpty ? "메모 등록" : "메모 수정", systemImage: "note.text")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(Color.blue)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                            .background(Color.blue.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+
                     if !isFuture {
                         NavigationLink {
-                            DailyInspectionView()
+                            DatedDailyInspectionView(date: date)
                         } label: {
                             Label(inspectionDone ? "일상점검 확인" : "일상점검", systemImage: inspectionDone ? "checkmark.shield.fill" : "shield.lefthalf.filled")
                                 .font(.headline.weight(.black))
@@ -351,6 +411,50 @@ private struct HomeCalendarDaySheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("닫기") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showMemoEditor) {
+                NavigationStack {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(HomeSettlementCalendarPolicy.fullDate(date))
+                            .font(.headline.weight(.black))
+                        TextEditor(text: $memoDraft)
+                            .padding(10)
+                            .frame(minHeight: 180)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                            .overlay { RoundedRectangle(cornerRadius: 14).stroke(MaroowellTheme.border, lineWidth: 1) }
+                        Button {
+                            memoStore.save(memoDraft, for: date)
+                            showMemoEditor = false
+                        } label: {
+                            Text("메모 저장")
+                                .font(.headline.weight(.black))
+                                .foregroundStyle(MaroowellTheme.ink)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(MaroowellTheme.yellow, in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        Spacer()
+                    }
+                    .padding(20)
+                    .background(MaroowellTheme.background)
+                    .navigationTitle("달력 메모")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            if !memoText.isEmpty {
+                                Button("삭제", role: .destructive) {
+                                    memoDraft = ""
+                                    memoStore.save("", for: date)
+                                    showMemoEditor = false
+                                }
+                            }
+                        }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("닫기") { showMemoEditor = false }
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
             }
         }
     }
@@ -518,6 +622,7 @@ private enum HomeSettlementCalendarPolicy {
 
     static func dayNumber(_ date: Date) -> Int { calendar.component(.day, from: date) }
     static func isSunday(_ date: Date) -> Bool { calendar.component(.weekday, from: date) == 1 }
+    static func isSaturday(_ date: Date) -> Bool { calendar.component(.weekday, from: date) == 7 }
     static func isToday(_ date: Date) -> Bool { calendar.isDateInToday(date) }
     static func isFuture(_ date: Date) -> Bool { calendar.startOfDay(for: date) > calendar.startOfDay(for: .now) }
 
