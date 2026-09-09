@@ -162,12 +162,22 @@ jobs:
               req.add_header("Content-Type", "application/json")
               try:
                   with urllib.request.urlopen(req, timeout=60) as resp:
-                      return json.loads(resp.read().decode())
+                      raw = resp.read()
+                      return json.loads(raw.decode()) if raw else {}
               except urllib.error.HTTPError as exc:
                   text = exc.read().decode(errors="replace")
                   print(f"App Store Connect API {method} {path} failed: HTTP {exc.code}")
                   print(text)
                   raise
+
+          # Clean up the signing assets from the previous failed CI attempt.
+          for path in ("/v1/profiles/3D9VW5Z6AK", "/v1/certificates/RHR8T7795V"):
+              try:
+                  api("DELETE", path)
+                  print(f"Deleted stale signing asset: {path}")
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in (404, 409):
+                      raise
 
           bundle_query = urllib.parse.urlencode({"filter[identifier]":"com.maroowell.app"})
           bundle_resp = api("GET", f"/v1/bundleIds?{bundle_query}")
@@ -244,7 +254,8 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
 
-          openssl pkcs12 -export \
+          # macOS security import is most compatible with legacy PKCS#12 encryption/MAC.
+          openssl pkcs12 -export -legacy \
             -out "$RUNNER_TEMP/maroowell_distribution.p12" \
             -inkey "$RUNNER_TEMP/maroowell_distribution.key" \
             -in "$RUNNER_TEMP/maroowell_distribution.pem" \
