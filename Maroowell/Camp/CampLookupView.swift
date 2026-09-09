@@ -616,12 +616,12 @@ private struct CampLookupRow: Decodable, Identifiable {
         region = try c.decodeIfPresent(String.self, forKey: .region) ?? ""
         type = try c.decodeIfPresent(String.self, forKey: .type) ?? ""
         mbCamp = try c.decodeIfPresent(String.self, forKey: .mbCamp) ?? ""
-        parentCamp = (try c.decodeIfPresent(String.self, forKey: .parentCamp))
-            ?? (try c.decodeIfPresent(String.self, forKey: .parentCampName))
-            ?? ""
-        receivingSH = (try c.decodeIfPresent(String.self, forKey: .receivingSH))
-            ?? (try c.decodeIfPresent(String.self, forKey: .receivingSHName))
-            ?? ""
+        let parentCampValue = try c.decodeIfPresent(String.self, forKey: .parentCamp)
+        let parentCampNameValue = try c.decodeIfPresent(String.self, forKey: .parentCampName)
+        parentCamp = parentCampValue ?? parentCampNameValue ?? ""
+        let receivingSHValue = try c.decodeIfPresent(String.self, forKey: .receivingSH)
+        let receivingSHNameValue = try c.decodeIfPresent(String.self, forKey: .receivingSHName)
+        receivingSH = receivingSHValue ?? receivingSHNameValue ?? ""
         description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
         latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
         longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
