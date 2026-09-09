@@ -4,6 +4,7 @@ struct LoginView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @State private var email = ""
     @State private var password = ""
+    @State private var showPrivacyPolicy = false
     @FocusState private var focusedField: Field?
 
     private enum Field {
@@ -91,6 +92,14 @@ struct LoginView: View {
                     .foregroundStyle(.secondary)
                     .padding(.top, 18)
 
+                Button("개인정보 처리방침") {
+                    focusedField = nil
+                    showPrivacyPolicy = true
+                }
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(MaroowellTheme.muted)
+                .padding(.top, 12)
+
                 Spacer(minLength: 36)
             }
             .padding(.horizontal, 28)
@@ -98,6 +107,16 @@ struct LoginView: View {
             .frame(maxWidth: .infinity)
         }
         .background(MaroowellTheme.background)
+        .sheet(isPresented: $showPrivacyPolicy) {
+            NavigationStack {
+                PrivacyPolicyView()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("닫기") { showPrivacyPolicy = false }
+                        }
+                    }
+            }
+        }
     }
 
     private func inputField<Content: View>(
