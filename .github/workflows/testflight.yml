@@ -91,240 +91,40 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" Maroowell/Resources/Info.plist 2>/dev/null || \
             /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Maroowell/Resources/Info.plist
 
-      - name: Create App Store distribution certificate and profile
-        env:
-          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
-          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
-        run: |
-          set -euo pipefail
-          KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
-          export KEY_PATH
-
-          cat > "$RUNNER_TEMP/create_signing.py" <<'PY'
-          import base64
-          import json
-          import os
-          import subprocess
-          import time
-          import urllib.error
-          import urllib.parse
-          import urllib.request
-          from pathlib import Path
-
-          key_id = os.environ["APPSTORE_KEY_ID"]
-          issuer_id = os.environ["APPSTORE_ISSUER_ID"]
-          key_path = os.environ["KEY_PATH"]
-          temp = Path(os.environ["RUNNER_TEMP"])
-
-          def b64url(data: bytes) -> str:
-              return base64.urlsafe_b64encode(data).decode().rstrip("=")
-
-          header = b64url(json.dumps({"alg":"ES256","kid":key_id,"typ":"JWT"}, separators=(",", ":")).encode())
-          now = int(time.time())
-          payload = b64url(json.dumps({"iss":issuer_id,"iat":now-30,"exp":now+900,"aud":"appstoreconnect-v1"}, separators=(",", ":")).encode())
-          signing_input = f"{header}.{payload}".encode()
-          der = subprocess.run(
-              ["openssl", "dgst", "-sha256", "-sign", key_path],
-              input=signing_input,
-              stdout=subprocess.PIPE,
-              check=True,
-          ).stdout
-
-          def der_len(data, pos):
-              n = data[pos]
-              pos += 1
-              if n < 128:
-                  return n, pos
-              count = n & 0x7F
-              return int.from_bytes(data[pos:pos+count], "big"), pos + count
-
-          pos = 0
-          if der[pos] != 0x30:
-              raise RuntimeError("Unexpected ECDSA signature")
-          _, pos = der_len(der, pos + 1)
-          if der[pos] != 0x02:
-              raise RuntimeError("Missing ECDSA r")
-          rlen, pos = der_len(der, pos + 1)
-          r = int.from_bytes(der[pos:pos+rlen], "big")
-          pos += rlen
-          if der[pos] != 0x02:
-              raise RuntimeError("Missing ECDSA s")
-          slen, pos = der_len(der, pos + 1)
-          s = int.from_bytes(der[pos:pos+slen], "big")
-          raw_sig = r.to_bytes(32, "big") + s.to_bytes(32, "big")
-          token = f"{header}.{payload}.{b64url(raw_sig)}"
-
-          def api(method, path, body=None):
-              url = "https://api.appstoreconnect.apple.com" + path
-              data = None if body is None else json.dumps(body).encode()
-              req = urllib.request.Request(url, data=data, method=method)
-              req.add_header("Authorization", f"Bearer {token}")
-              req.add_header("Content-Type", "application/json")
-              try:
-                  with urllib.request.urlopen(req, timeout=60) as resp:
-                      raw = resp.read()
-                      return json.loads(raw.decode()) if raw else {}
-              except urllib.error.HTTPError as exc:
-                  text = exc.read().decode(errors="replace")
-                  print(f"App Store Connect API {method} {path} failed: HTTP {exc.code}")
-                  print(text)
-                  raise
-
-          # Clean up the signing assets from the previous failed CI attempt.
-          for path in ("/v1/profiles/3D9VW5Z6AK", "/v1/certificates/RHR8T7795V"):
-              try:
-                  api("DELETE", path)
-                  print(f"Deleted stale signing asset: {path}")
-              except urllib.error.HTTPError as exc:
-                  if exc.code not in (404, 409):
-                      raise
-
-          bundle_query = urllib.parse.urlencode({"filter[identifier]":"com.maroowell.app"})
-          bundle_resp = api("GET", f"/v1/bundleIds?{bundle_query}")
-          if not bundle_resp.get("data"):
-              raise RuntimeError("Bundle ID com.maroowell.app is not registered in this Apple Developer team")
-          bundle_id = bundle_resp["data"][0]["id"]
-          print(f"Found Bundle ID resource: {bundle_id}")
-
-          signing_key = temp / "maroowell_distribution.key"
-          signing_csr = temp / "maroowell_distribution.csr"
-          subprocess.run(["openssl", "genrsa", "-out", str(signing_key), "2048"], check=True, stdout=subprocess.DEVNULL)
-          subprocess.run([
-              "openssl", "req", "-new", "-key", str(signing_key), "-out", str(signing_csr),
-              "-subj", "/CN=Maroowell GitHub TestFlight"
-          ], check=True)
-          csr_content = signing_csr.read_text()
-
-          cert_body = {
-              "data": {
-                  "type": "certificates",
-                  "attributes": {
-                      "certificateType": "DISTRIBUTION",
-                      "csrContent": csr_content
-                  }
-              }
-          }
-          cert_resp = api("POST", "/v1/certificates", cert_body)
-          cert_id = cert_resp["data"]["id"]
-          cert_content = cert_resp["data"]["attributes"]["certificateContent"]
-          cert_der = temp / "maroowell_distribution.cer"
-          cert_der.write_bytes(base64.b64decode(cert_content))
-          cert_pem = temp / "maroowell_distribution.pem"
-          subprocess.run(["openssl", "x509", "-inform", "DER", "-in", str(cert_der), "-out", str(cert_pem)], check=True)
-          print(f"Created Apple Distribution certificate: {cert_id}")
-
-          profile_name = f"Maroowell GitHub AppStore {os.environ['GITHUB_RUN_ID']}"
-          profile_body = {
-              "data": {
-                  "type": "profiles",
-                  "attributes": {
-                      "name": profile_name,
-                      "profileType": "IOS_APP_STORE"
-                  },
-                  "relationships": {
-                      "bundleId": {
-                          "data": {"type": "bundleIds", "id": bundle_id}
-                      },
-                      "certificates": {
-                          "data": [{"type": "certificates", "id": cert_id}]
-                      }
-                  }
-              }
-          }
-          profile_resp = api("POST", "/v1/profiles", profile_body)
-          profile_id = profile_resp["data"]["id"]
-          profile_content = profile_resp["data"]["attributes"]["profileContent"]
-          profile_path = temp / "Maroowell_AppStore.mobileprovision"
-          profile_path.write_bytes(base64.b64decode(profile_content))
-          print(f"Created App Store provisioning profile: {profile_id}")
-
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
-              env.write(f"CI_PROFILE_NAME={profile_name}\n")
-              env.write(f"CI_CERT_ID={cert_id}\n")
-              env.write(f"CI_PROFILE_ID={profile_id}\n")
-          PY
-
-          python3 "$RUNNER_TEMP/create_signing.py"
-
-          KEYCHAIN_PATH="$RUNNER_TEMP/maroowell-ci.keychain-db"
-          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
-          P12_PASSWORD="$(openssl rand -hex 24)"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
-
-          # macOS security import is most compatible with legacy PKCS#12 encryption/MAC.
-          openssl pkcs12 -export -legacy \
-            -out "$RUNNER_TEMP/maroowell_distribution.p12" \
-            -inkey "$RUNNER_TEMP/maroowell_distribution.key" \
-            -in "$RUNNER_TEMP/maroowell_distribution.pem" \
-            -passout "pass:$P12_PASSWORD"
-          security import "$RUNNER_TEMP/maroowell_distribution.p12" \
-            -k "$KEYCHAIN_PATH" \
-            -P "$P12_PASSWORD" \
-            -A \
-            -T /usr/bin/codesign \
-            -T /usr/bin/security
-          security set-key-partition-list \
-            -S apple-tool:,apple: \
-            -s \
-            -k "$KEYCHAIN_PASSWORD" \
-            "$KEYCHAIN_PATH"
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          security cms -D -i "$RUNNER_TEMP/Maroowell_AppStore.mobileprovision" > "$RUNNER_TEMP/profile.plist"
-          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/profile.plist")"
-          cp "$RUNNER_TEMP/Maroowell_AppStore.mobileprovision" \
-            "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
-          echo "Installed provisioning profile UUID: $PROFILE_UUID"
-
-      - name: Configure project for manual App Store signing
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          path = Path("project.yml")
-          text = path.read_text()
-          old = "        CODE_SIGN_STYLE: Automatic\n        DEVELOPMENT_TEAM: V5A6HB9WBY"
-          new = (
-              "        CODE_SIGN_STYLE: Manual\n"
-              "        CODE_SIGN_IDENTITY: Apple Distribution\n"
-              f"        PROVISIONING_PROFILE_SPECIFIER: \"{os.environ['CI_PROFILE_NAME']}\"\n"
-              "        DEVELOPMENT_TEAM: V5A6HB9WBY\n"
-              "        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon"
-          )
-          if old not in text:
-              raise SystemExit("Expected signing settings not found in project.yml")
-          path.write_text(text.replace(old, new, 1))
-          PY
-          grep -A8 'CODE_SIGN_STYLE' project.yml
-
       - name: Generate Xcode project
         run: xcodegen generate
 
       - name: Resolve Swift packages
         run: xcodebuild -resolvePackageDependencies -project Maroowell.xcodeproj -scheme Maroowell
 
-      - name: Archive manually signed App Store build
+      - name: Archive with automatic signing
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
         run: |
           set -euo pipefail
+          KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
           xcodebuild \
             -project Maroowell.xcodeproj \
             -scheme Maroowell \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Maroowell.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             archive
 
-      - name: Export signed IPA
+      - name: Cloud sign and upload to TestFlight
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
         run: |
           set -euo pipefail
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -332,18 +132,11 @@ jobs:
             <key>method</key>
             <string>app-store-connect</string>
             <key>destination</key>
-            <string>export</string>
+            <string>upload</string>
             <key>signingStyle</key>
-            <string>manual</string>
-            <key>signingCertificate</key>
-            <string>Apple Distribution</string>
+            <string>automatic</string>
             <key>teamID</key>
             <string>V5A6HB9WBY</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>com.maroowell.app</key>
-              <string>${CI_PROFILE_NAME}</string>
-            </dict>
             <key>manageAppVersionAndBuildNumber</key>
             <false/>
             <key>uploadSymbols</key>
@@ -352,36 +145,13 @@ jobs:
           </plist>
           PLIST
           rm -rf "$RUNNER_TEMP/TestFlightExport"
+          mkdir -p "$RUNNER_TEMP/TestFlightExport"
           xcodebuild \
             -exportArchive \
             -archivePath "$RUNNER_TEMP/Maroowell.xcarchive" \
             -exportPath "$RUNNER_TEMP/TestFlightExport" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
-          find "$RUNNER_TEMP/TestFlightExport" -maxdepth 2 -name '*.ipa' -print
-
-      - name: Validate and upload to TestFlight
-        env:
-          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
-          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
-        run: |
-          set -euo pipefail
-          IPA="$(find "$RUNNER_TEMP/TestFlightExport" -maxdepth 2 -name '*.ipa' -print -quit)"
-          test -n "$IPA"
-          xcrun altool --validate-app \
-            --type ios \
-            --file "$IPA" \
-            --apiKey "$APPSTORE_KEY_ID" \
-            --apiIssuer "$APPSTORE_ISSUER_ID"
-          xcrun altool --upload-app \
-            --type ios \
-            --file "$IPA" \
-            --apiKey "$APPSTORE_KEY_ID" \
-            --apiIssuer "$APPSTORE_ISSUER_ID"
-
-      - name: Keep signed IPA as workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Maroowell-TestFlight-${{ github.run_number }}
-          path: ${{ runner.temp }}/TestFlightExport/*.ipa
-          retention-days: 7
-          if-no-files-found: error
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID"
