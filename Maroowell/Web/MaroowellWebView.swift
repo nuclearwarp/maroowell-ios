@@ -3,6 +3,61 @@ import WebKit
 import Supabase
 
 struct MaroowellWebView: View {
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
+    let title: String
+    let path: String
+
+    var body: some View {
+        if let session = sessionViewModel.session, Self.isNative(path) {
+            nativeDestination(session: session)
+        } else {
+            MaroowellEmbeddedWebView(title: title, path: path)
+        }
+    }
+
+    private static func isNative(_ raw: String) -> Bool {
+        switch AppAccessPolicy.basePath(raw) {
+        case "/zipcode_search", "/coupangRouteMap.html", "/coupang_camp_map", "/coupang_freshbag",
+             "/cleansing_history", "/maroowell_route_info", "/maroowell_route", "/dragon_car_index",
+             "/dragon_car_schedule", "/admin_access.html", "/maroowell_push":
+            return true
+        default:
+            return false
+        }
+    }
+
+    @ViewBuilder
+    private func nativeDestination(session: AppSession) -> some View {
+        switch AppAccessPolicy.basePath(path) {
+        case "/zipcode_search":
+            ZipcodeBoundaryMapView(session: session)
+        case "/coupangRouteMap.html":
+            RouteEditorMapWorkspace(session: session)
+        case "/coupang_camp_map":
+            CampMapView(session: session)
+        case "/coupang_freshbag":
+            FreshbagStatusView(session: session)
+        case "/cleansing_history":
+            CleansingHistoryView(session: session)
+        case "/maroowell_route_info":
+            RouteInfoView(session: session)
+        case "/maroowell_route":
+            RoutePriceView(session: session)
+        case "/dragon_car_index":
+            DragonCarView(session: session)
+        case "/dragon_car_schedule":
+            DragonScheduleView(session: session)
+        case "/admin_access.html":
+            AdminApprovalView(session: session)
+        case "/maroowell_push":
+            PushConsoleView(session: session)
+        default:
+            MaroowellEmbeddedWebView(title: title, path: path)
+        }
+    }
+}
+
+private struct MaroowellEmbeddedWebView: View {
     let title: String
     let path: String
 
