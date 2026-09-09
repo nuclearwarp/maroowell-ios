@@ -129,6 +129,28 @@ private struct RouteInfoDetail: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    if let point = row.mapPoint {
+                        NavigationLink {
+                            AddressMapView(
+                                title: row.title.isEmpty ? "라우트 위치" : row.title,
+                                items: [
+                                    AddressMapItem(
+                                        label: row.title.isEmpty ? row.fullRoute : row.title,
+                                        address: "",
+                                        latitude: point.latitude,
+                                        longitude: point.longitude
+                                    )
+                                ]
+                            )
+                        } label: {
+                            Label("지도에서 위치 보기", systemImage: "map.fill")
+                                .font(.subheadline.weight(.black))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 46)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+
                     detail("캠프", row.camp)
                     detail("라우트", row.fullRoute)
                     detail("서브", row.sub)
@@ -188,6 +210,21 @@ private struct RouteInfoRow: Identifiable, Hashable {
 
     var searchable: String {
         [camp, route, sub, subSub, fullRoute, description, memo].joined(separator: " ").lowercased()
+    }
+
+    var mapPoint: (latitude: Double, longitude: Double)? {
+        let values = coordinate
+            .components(separatedBy: CharacterSet(charactersIn: ", /|()[]"))
+            .compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        guard values.count >= 2 else { return nil }
+        let first = values[0], second = values[1]
+        if (-90...90).contains(first), (-180...180).contains(second) {
+            return (first, second)
+        }
+        if (-90...90).contains(second), (-180...180).contains(first) {
+            return (second, first)
+        }
+        return nil
     }
 }
 
