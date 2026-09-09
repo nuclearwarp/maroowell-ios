@@ -42,6 +42,7 @@ struct AppSession: Equatable {
     let isAdmin: Bool
     let roleLevel: Int
     let isDragonCarAdmin: Bool
+    let visiblePaths: Set<String>
 
     var isTeamLeader: Bool {
         isMaroowell && roleLevel >= 30
@@ -53,6 +54,10 @@ struct AppSession: Equatable {
 
     var isSuperAdmin: Bool {
         isMaroowell && isAdmin && roleLevel >= 90
+    }
+
+    func canView(_ path: String) -> Bool {
+        visiblePaths.contains(AppAccessPolicy.basePath(path))
     }
 }
 

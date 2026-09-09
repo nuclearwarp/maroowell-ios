@@ -1,6 +1,14 @@
 import Foundation
 import Supabase
 
+private struct CleansingAccessRow: Decodable {
+    let canSelect: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case canSelect = "can_select"
+    }
+}
+
 @MainActor
 final class SessionViewModel: ObservableObject {
     @Published private(set) var session: AppSession?
@@ -75,6 +83,17 @@ final class SessionViewModel: ObservableObject {
         }
 
         let access = try await loadAccountAccess()
+        let canCleansingHistory = access.isMaroowell && access.isAdmin && access.maxRoleLevel >= 90
+            ? true
+            : await loadCleansingHistoryAccess(userID: user.id)
+        let visiblePaths = AppAccessPolicy.visiblePaths(
+            isMaroowell: access.isMaroowell,
+            isAdmin: access.isAdmin,
+            roleLevel: access.maxRoleLevel,
+            isDragonCarAdmin: access.isDragonCarAdmin,
+            canCleansingHistory: canCleansingHistory
+        )
+
         let email = user.email ?? ""
         let displayName = try await loadDisplayName(userID: user.id)
             ?? email.split(separator: "@").first.map(String.init)
@@ -87,7 +106,8 @@ final class SessionViewModel: ObservableObject {
             isMaroowell: access.isMaroowell,
             isAdmin: access.isAdmin,
             roleLevel: access.maxRoleLevel,
-            isDragonCarAdmin: access.isDragonCarAdmin
+            isDragonCarAdmin: access.isDragonCarAdmin,
+            visiblePaths: visiblePaths
         )
     }
 
@@ -105,6 +125,22 @@ final class SessionViewModel: ObservableObject {
             throw MaroowellAuthError.accessUnavailable
         }
         return value
+    }
+
+    private func loadCleansingHistoryAccess(userID: UUID) async -> Bool {
+        do {
+            let response = try await client
+                .from("cleansing_history_access")
+                .select("can_select")
+                .eq("user_id", value: userID.uuidString)
+                .eq("can_select", value: true)
+                .limit(1)
+                .execute()
+            let rows = try JSONDecoder().decode([CleansingAccessRow].self, from: response.data)
+            return rows.first?.canSelect == true
+        } catch {
+            return false
+        }
     }
 
     private func loadDisplayName(userID: UUID) async throws -> String? {
