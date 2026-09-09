@@ -36,9 +36,24 @@ jobs:
           KEY_DIR="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$KEY_DIR"
           KEY_PATH="$KEY_DIR/AuthKey_${APPSTORE_KEY_ID}.p8"
-          printf '%s' "$APPSTORE_PRIVATE_KEY" > "$KEY_PATH"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          raw = os.environ["APPSTORE_PRIVATE_KEY"].strip()
+          raw = raw.replace("\\n", "\n").replace("\r", "")
+          raw = raw.strip().strip('"').strip("'").strip()
+          if "-----BEGIN PRIVATE KEY-----" not in raw:
+              body = "".join(raw.split())
+              raw = f"-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n"
+          elif not raw.endswith("\n"):
+              raw += "\n"
+          path = Path(os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{os.environ['APPSTORE_KEY_ID']}.p8"))
+          path.write_text(raw, encoding="utf-8")
+          PY
           chmod 600 "$KEY_PATH"
           test -s "$KEY_PATH"
+          openssl pkey -in "$KEY_PATH" -noout >/dev/null
 
       - name: Prepare App Store icon and export metadata
         run: |
