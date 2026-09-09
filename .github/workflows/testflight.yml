@@ -35,6 +35,7 @@ jobs:
           set -euo pipefail
           KEY_DIR="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$KEY_DIR"
+          RAW_KEY_PATH="$KEY_DIR/AuthKey_${APPSTORE_KEY_ID}_raw.p8"
           KEY_PATH="$KEY_DIR/AuthKey_${APPSTORE_KEY_ID}.p8"
           python3 - <<'PY'
           import os
@@ -43,17 +44,22 @@ jobs:
           raw = os.environ["APPSTORE_PRIVATE_KEY"].strip()
           raw = raw.replace("\\n", "\n").replace("\r", "")
           raw = raw.strip().strip('"').strip("'").strip()
-          if "-----BEGIN PRIVATE KEY-----" not in raw:
+          if "-----BEGIN PRIVATE KEY-----" not in raw and "-----BEGIN EC PRIVATE KEY-----" not in raw:
               body = "".join(raw.split())
               raw = f"-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n"
           elif not raw.endswith("\n"):
               raw += "\n"
-          path = Path(os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{os.environ['APPSTORE_KEY_ID']}.p8"))
+          path = Path(os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{os.environ['APPSTORE_KEY_ID']}_raw.p8"))
           path.write_text(raw, encoding="utf-8")
           PY
+          chmod 600 "$RAW_KEY_PATH"
+          test -s "$RAW_KEY_PATH"
+          openssl pkey -in "$RAW_KEY_PATH" -noout >/dev/null
+          openssl ec -in "$RAW_KEY_PATH" -out "$KEY_PATH" >/dev/null 2>&1
           chmod 600 "$KEY_PATH"
           test -s "$KEY_PATH"
-          openssl pkey -in "$KEY_PATH" -noout >/dev/null
+          openssl ec -in "$KEY_PATH" -check -noout >/dev/null 2>&1
+          grep -q '^-----BEGIN EC PRIVATE KEY-----$' "$KEY_PATH"
 
       - name: Prepare App Store icon and export metadata
         run: |
