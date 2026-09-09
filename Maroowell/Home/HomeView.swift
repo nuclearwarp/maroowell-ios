@@ -102,6 +102,9 @@ struct HomeView: View {
         case .maroowellInfo:
             NavigationLink { MaroowellInfoView() } label: { HomeMenuRow(item: item, badge: "관리자") }
                 .buttonStyle(.plain)
+        case .campLookup:
+            NavigationLink { CampLookupView(session: session) } label: { HomeMenuRow(item: item, badge: "팀장") }
+                .buttonStyle(.plain)
         case .web(let path):
             NavigationLink {
                 MaroowellWebView(title: item.title, path: path)
@@ -293,6 +296,9 @@ struct HomeView: View {
         if session.canView(AppAccessPolicy.metaRealtimePath) {
             items.append(.init(tab: .status, title: "실시간 배송 현황", subtitle: "META 라우트 스캔 · 오스캔 자동 확인", symbol: "dot.radiowaves.left.and.right", destination: .metaRealtime))
         }
+        if session.canView("/coupang_camp") {
+            items.append(.init(tab: .status, title: "쿠팡 캠프 조회", subtitle: "유형별 요약 · 검색 · 지도", symbol: "building.fill", destination: .campLookup))
+        }
         if session.canView("/maroowell_info") {
             items.append(.init(tab: .more, title: "마루웰 정보", subtitle: "인원 기본정보 조회 · 수정 · 추가", symbol: "building.2.fill", destination: .maroowellInfo))
         }
@@ -300,7 +306,6 @@ struct HomeView: View {
         let webItems: [(HomeTab, String, String, String, String)] = [
             (.more, "우편번호 검색", "주소·지도 빠른 조회", "mappin.and.ellipse", "/zipcode_search"),
             (.more, "라우트 편집기", "라우트·벤더·입차지 편집", "point.3.connected.trianglepath.dotted", "/coupangRouteMap.html"),
-            (.status, "쿠팡 캠프 조회", "캠프 및 주소 조회", "building.fill", "/coupang_camp"),
             (.status, "프백 현황", "프레시백 현황 조회", "shippingbox.and.arrow.backward.fill", "/coupang_freshbag"),
             (.status, "클렌징 히스토리", "클렌징 기록 조회", "clock.arrow.circlepath", "/cleansing_history"),
             (.status, "마루웰 라우트정보", "라우트 상세·지도·배송 포인트", "map.fill", "/maroowell_route_info"),
@@ -373,6 +378,7 @@ private enum HomeMenuDestination {
     case schedule
     case metaRealtime
     case maroowellInfo
+    case campLookup
     case web(String)
     case placeholder(String)
 }
