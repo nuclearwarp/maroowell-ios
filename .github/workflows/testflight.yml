@@ -46,13 +46,13 @@ jobs:
           ICON_DIR="Maroowell/Resources/Assets.xcassets/AppIcon.appiconset"
           mkdir -p "$ICON_DIR"
           magick -size 1024x1024 canvas:white \
-            -fill '#C2141C' \
-            -gravity center \
-            -font Helvetica-Bold \
-            -pointsize 330 \
-            -annotate +0+0 'MW' \
+            -stroke '#C2141C' \
+            -strokewidth 82 \
+            -fill none \
+            -draw "path 'M 120,700 L 120,330 L 315,575 L 505,330 L 505,700'" \
+            -draw "path 'M 565,330 L 650,700 L 760,475 L 870,700 L 955,330'" \
             -alpha off \
-            "$ICON_DIR/AppIcon.png"
+            "PNG24:$ICON_DIR/AppIcon.png"
           sips -g pixelWidth -g pixelHeight -g hasAlpha "$ICON_DIR/AppIcon.png"
           cat > "$ICON_DIR/Contents.json" <<'JSON'
           {
