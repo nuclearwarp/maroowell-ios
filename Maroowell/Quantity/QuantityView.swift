@@ -1,8 +1,13 @@
 import SwiftUI
 
 struct QuantityView: View {
-    @StateObject private var viewModel = QuantityViewModel()
+    @StateObject private var viewModel: QuantityViewModel
     @State private var showMessage = false
+
+    @MainActor
+    init(date: Date = .now) {
+        _viewModel = StateObject(wrappedValue: QuantityViewModel(date: date))
+    }
 
     var body: some View {
         ScrollView {
