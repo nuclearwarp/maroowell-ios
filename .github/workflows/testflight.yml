@@ -100,7 +100,7 @@ jobs:
       - name: Resolve Swift packages
         run: xcodebuild -resolvePackageDependencies -project Maroowell.xcodeproj -scheme Maroowell
 
-      - name: Archive signed iPhone build
+      - name: Archive App Store distribution build
         env:
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
@@ -119,6 +119,8 @@ jobs:
             -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             DEVELOPMENT_TEAM="V5A6HB9WBY" \
+            CODE_SIGN_STYLE="Automatic" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             ASSETCATALOG_COMPILER_APPICON_NAME="AppIcon" \
             archive
 
