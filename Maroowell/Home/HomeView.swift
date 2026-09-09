@@ -96,6 +96,9 @@ struct HomeView: View {
         case .schedule:
             NavigationLink { ScheduleView() } label: { HomeMenuRow(item: item, badge: "팀장") }
                 .buttonStyle(.plain)
+        case .metaRealtime:
+            NavigationLink { MetaRealtimeView() } label: { HomeMenuRow(item: item, badge: "팀장") }
+                .buttonStyle(.plain)
         case .web(let path):
             NavigationLink {
                 MaroowellWebView(title: item.title, path: path)
@@ -285,7 +288,7 @@ struct HomeView: View {
             items.append(.init(tab: .work, title: "입차 스케줄", subtitle: "전체 라우트 입차 일정 조회 및 관리", symbol: "calendar", destination: .schedule))
         }
         if session.canView(AppAccessPolicy.metaRealtimePath) {
-            items.append(.init(tab: .status, title: "실시간 배송 현황", subtitle: "META 라우트 스캔 · 오스캔 자동 확인", symbol: "dot.radiowaves.left.and.right", destination: .placeholder("Android 실시간 META 화면을 iOS 네이티브로 옮기는 중입니다.")))
+            items.append(.init(tab: .status, title: "실시간 배송 현황", subtitle: "META 라우트 스캔 · 오스캔 자동 확인", symbol: "dot.radiowaves.left.and.right", destination: .metaRealtime))
         }
 
         let webItems: [(HomeTab, String, String, String, String)] = [
@@ -363,6 +366,7 @@ private enum HomeMenuDestination {
     case quantityStats
     case inspection
     case schedule
+    case metaRealtime
     case web(String)
     case placeholder(String)
 }
