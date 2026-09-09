@@ -17,10 +17,16 @@ struct SignaturePad: View {
                         guard stroke.count > 1 else { continue }
                         var path = Path()
                         if let first = stroke.first {
-                            path.move(to: CGPoint(x: first.x * size.width, y: first.y * size.height))
+                            path.move(to: CGPoint(
+                                x: CGFloat(first.x) * size.width,
+                                y: CGFloat(first.y) * size.height
+                            ))
                         }
                         for point in stroke.dropFirst() {
-                            path.addLine(to: CGPoint(x: point.x * size.width, y: point.y * size.height))
+                            path.addLine(to: CGPoint(
+                                x: CGFloat(point.x) * size.width,
+                                y: CGFloat(point.y) * size.height
+                            ))
                         }
                         context.stroke(path, with: .color(.black), style: StrokeStyle(lineWidth: 3.2, lineCap: .round, lineJoin: .round))
                     }
@@ -38,8 +44,8 @@ struct SignaturePad: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         guard proxy.size.width > 0, proxy.size.height > 0 else { return }
-                        let x = min(max(value.location.x / proxy.size.width, 0), 1)
-                        let y = min(max(value.location.y / proxy.size.height, 0), 1)
+                        let x = Double(min(max(value.location.x / proxy.size.width, 0), 1))
+                        let y = Double(min(max(value.location.y / proxy.size.height, 0), 1))
                         currentStroke.append(SignaturePoint(x: x, y: y))
                     }
                     .onEnded { _ in
@@ -63,10 +69,16 @@ struct SignaturePreview: View {
                 guard stroke.count > 1 else { continue }
                 var path = Path()
                 if let first = stroke.first {
-                    path.move(to: CGPoint(x: first.x * size.width, y: first.y * size.height))
+                    path.move(to: CGPoint(
+                        x: CGFloat(first.x) * size.width,
+                        y: CGFloat(first.y) * size.height
+                    ))
                 }
                 for point in stroke.dropFirst() {
-                    path.addLine(to: CGPoint(x: point.x * size.width, y: point.y * size.height))
+                    path.addLine(to: CGPoint(
+                        x: CGFloat(point.x) * size.width,
+                        y: CGFloat(point.y) * size.height
+                    ))
                 }
                 context.stroke(path, with: .color(.black), style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
             }
