@@ -330,7 +330,7 @@ private struct HomeCalendarDaySheet: View {
                     }
 
                     NavigationLink {
-                        QuantityView()
+                        QuantityView(date: date)
                     } label: {
                         Label("배송 수량 등록", systemImage: "shippingbox.fill")
                             .font(.headline.weight(.black))
