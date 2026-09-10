@@ -8,13 +8,16 @@ final class InspectionStore: ObservableObject {
     @Published private(set) var revision = 0
 
     private let defaults: UserDefaults
+    private let legacyDefaults: UserDefaults?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private var calendar: Calendar
     private let isoFormatter: DateFormatter
 
     private init() {
-        defaults = UserDefaults(suiteName: "maroowell_daily_inspection_ios") ?? .standard
+        defaults = .standard
+        legacyDefaults = UserDefaults(suiteName: "maroowell_daily_inspection_ios")
+
         var cal = Calendar(identifier: .gregorian)
         cal.locale = Locale(identifier: "ko_KR")
         cal.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
@@ -26,28 +29,30 @@ final class InspectionStore: ObservableObject {
         formatter.timeZone = cal.timeZone
         formatter.dateFormat = "yyyy-MM-dd"
         isoFormatter = formatter
+
+        migrateLegacyStorageIfNeeded()
     }
 
     func loadProfile() -> InspectionProfile {
-        guard let data = defaults.data(forKey: "profile") else { return InspectionProfile() }
+        guard let data = storedData(forKey: "profile") else { return InspectionProfile() }
         return (try? decoder.decode(InspectionProfile.self, from: data)) ?? InspectionProfile()
     }
 
     func saveProfile(_ profile: InspectionProfile) {
         if let data = try? encoder.encode(profile) {
-            defaults.set(data, forKey: "profile")
+            storeData(data, forKey: "profile")
             revision &+= 1
         }
     }
 
     func loadSignature() -> InspectionSignature {
-        guard let data = defaults.data(forKey: "signature") else { return InspectionSignature() }
+        guard let data = storedData(forKey: "signature") else { return InspectionSignature() }
         return (try? decoder.decode(InspectionSignature.self, from: data)) ?? InspectionSignature()
     }
 
     func saveSignature(_ signature: InspectionSignature) {
         if let data = try? encoder.encode(signature) {
-            defaults.set(data, forKey: "signature")
+            storeData(data, forKey: "signature")
             revision &+= 1
         }
     }
@@ -67,7 +72,7 @@ final class InspectionStore: ObservableObject {
 
     func loadMonth(_ date: Date) -> [Int: InspectionDayRecord] {
         let key = "month_\(monthKey(for: date))"
-        guard let data = defaults.data(forKey: key) else { return [:] }
+        guard let data = storedData(forKey: key) else { return [:] }
         return (try? decoder.decode([Int: InspectionDayRecord].self, from: data)) ?? [:]
     }
 
@@ -171,9 +176,35 @@ final class InspectionStore: ObservableObject {
         let key = "month_\(monthKey(for: date))"
         if month.isEmpty {
             defaults.removeObject(forKey: key)
+            legacyDefaults?.removeObject(forKey: key)
         } else if let data = try? encoder.encode(month) {
-            defaults.set(data, forKey: key)
+            storeData(data, forKey: key)
         }
         revision &+= 1
+    }
+
+    private func storedData(forKey key: String) -> Data? {
+        if let data = defaults.data(forKey: key) {
+            return data
+        }
+        if let data = legacyDefaults?.data(forKey: key) {
+            defaults.set(data, forKey: key)
+            return data
+        }
+        return nil
+    }
+
+    private func storeData(_ data: Data, forKey key: String) {
+        defaults.set(data, forKey: key)
+        legacyDefaults?.set(data, forKey: key)
+    }
+
+    private func migrateLegacyStorageIfNeeded() {
+        guard let legacyDefaults else { return }
+        for (key, value) in legacyDefaults.dictionaryRepresentation() {
+            guard key == "profile" || key == "signature" || key.hasPrefix("month_") else { continue }
+            guard defaults.object(forKey: key) == nil else { continue }
+            defaults.set(value, forKey: key)
+        }
     }
 }
