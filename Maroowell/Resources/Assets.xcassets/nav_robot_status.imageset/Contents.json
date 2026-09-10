@@ -1,0 +1,13 @@
+{
+  "images": [
+    {
+      "filename": "nav_robot_status.png",
+      "idiom": "universal",
+      "scale": "1x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

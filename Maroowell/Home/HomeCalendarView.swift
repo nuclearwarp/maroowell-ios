@@ -8,8 +8,7 @@ struct HomeCalendarView: View {
     @StateObject private var holidayStore = HomeHolidayStore()
 
     @State private var anchorMonth: Date
-    @State private var selectedDate: Date?
-    @State private var showDaySheet = false
+    @State private var selectedDay: HomeSettlementCalendarDay?
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
 
@@ -61,16 +60,15 @@ struct HomeCalendarView: View {
         .task(id: periodKey) {
             await loadCalendarData()
         }
-        .sheet(isPresented: $showDaySheet) {
-            if let selectedDate {
-                HomeCalendarDaySheet(
-                    date: selectedDate,
-                    entries: scheduleStore.entries(for: selectedDate),
-                    holidayName: holidayStore.holiday(for: selectedDate)
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
+        .sheet(item: $selectedDay) { day in
+            HomeCalendarDaySheet(
+                date: day.date,
+                entries: scheduleStore.entries(for: day.date),
+                holidayName: holidayStore.holiday(for: day.date)
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .preferredColorScheme(.light)
         }
     }
 
@@ -90,9 +88,6 @@ struct HomeCalendarView: View {
                 Text(HomeSettlementCalendarPolicy.title(anchorMonth))
                     .font(.headline.weight(.black))
                     .foregroundStyle(MaroowellTheme.ink)
-                Text(HomeSettlementCalendarPolicy.rangeLabel(anchorMonth))
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(MaroowellTheme.muted)
             }
             .frame(maxWidth: .infinity)
 
@@ -123,8 +118,7 @@ struct HomeCalendarView: View {
     private func dayCell(_ day: HomeSettlementCalendarDay) -> some View {
         if day.inPeriod {
             Button {
-                selectedDate = day.date
-                showDaySheet = true
+                selectedDay = day
             } label: {
                 activeDayCell(day)
             }
@@ -147,7 +141,7 @@ struct HomeCalendarView: View {
         let inspectionDone = inspectionStore.hasDay(day.date)
         let isFuture = HomeSettlementCalendarPolicy.isFuture(day.date)
         let amount = quantityStore.load(day.date).map(quantityStore.amount(of:))
-        let routeText = calendarRouteText(entries)
+        let campText = calendarCampText(entries, date: day.date)
         let isToday = HomeSettlementCalendarPolicy.isToday(day.date)
         let holidayName = holidayStore.holiday(for: day.date)
         let memoText = memoStore.memo(for: day.date)
@@ -173,7 +167,7 @@ struct HomeCalendarView: View {
                     .minimumScaleFactor(0.55)
             }
 
-            Text(routeText)
+            Text(campText)
                 .font(.system(size: 8.2, weight: .black))
                 .foregroundStyle(scheduleColor(hasDay: hasDay, hasNight: hasNight))
                 .lineLimit(2)
@@ -255,16 +249,24 @@ struct HomeCalendarView: View {
         return MaroowellTheme.ink
     }
 
-    private func calendarRouteText(_ entries: [HomePersonalScheduleEntry]) -> String {
+    private func calendarCampText(_ entries: [HomePersonalScheduleEntry], date: Date) -> String {
         let active = entries.filter { !$0.isOff }
-        if active.isEmpty {
-            return entries.isEmpty ? "" : "휴무"
+        let scheduleCamps = active.map(\.camp).filter { !$0.isEmpty }
+        let savedCamps = quantityStore.load(date)?.routes.map(\.campName).filter { !$0.isEmpty } ?? []
+        var camps: [String] = []
+        for camp in scheduleCamps + savedCamps where !camps.contains(camp) {
+            camps.append(camp)
         }
-        return active.flatMap { entry in
-            entry.routes.filter { $0 != "휴무" }.prefix(2)
+
+        if !active.isEmpty {
+            if camps.isEmpty { return "입차" }
+            return camps.count == 1 ? camps[0] : "\(camps[0]) +\(camps.count - 1)"
         }
-        .prefix(3)
-        .joined(separator: " · ")
+        if entries.contains(where: \.isOff) { return "휴무" }
+        if !camps.isEmpty {
+            return camps.count == 1 ? camps[0] : "\(camps[0]) +\(camps.count - 1)"
+        }
+        return ""
     }
 
     private var visibleDays: [HomeSettlementCalendarDay] {
@@ -603,7 +605,7 @@ private enum HomeSettlementCalendarPolicy {
 
     static func title(_ anchor: Date) -> String {
         let components = calendar.dateComponents([.year, .month], from: anchor)
-        return String(format: "%04d년 %02d월 정산", components.year ?? 0, components.month ?? 0)
+        return String(format: "%04d년 %02d월", components.year ?? 0, components.month ?? 0)
     }
 
     static func rangeLabel(_ anchor: Date) -> String {

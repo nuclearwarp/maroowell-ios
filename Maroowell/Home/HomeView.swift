@@ -129,31 +129,25 @@ struct HomeView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 8) {
-                    Text("마루웰")
-                        .font(.headline.weight(.black))
-                        .foregroundStyle(MaroowellTheme.deepYellow)
-                    Text("iOS v1.0")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(MaroowellTheme.muted)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(Color.white, in: Capsule())
-                }
-
-                Text("안녕하세요, \(session.displayName)님")
-                    .font(.system(size: 27, weight: .black, design: .rounded))
-                    .foregroundStyle(MaroowellTheme.ink)
-                Text("오늘도 안전하고 좋은 하루 보내세요 💛")
-                    .font(.subheadline.weight(.medium))
+        HStack(alignment: .center, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("마루웰")
+                    .font(.headline.weight(.black))
+                    .foregroundStyle(MaroowellTheme.deepYellow)
+                Text("iOS v1.0")
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(MaroowellTheme.muted)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Color.white, in: Capsule())
             }
-
-            Spacer(minLength: 8)
-            MaroowellMark(size: 58)
+            Spacer()
+            Text(session.displayName)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(MaroowellTheme.ink)
+                .lineLimit(1)
         }
+        .frame(height: 42)
     }
 
     private var settlementHero: some View {
@@ -379,6 +373,15 @@ private enum HomeTab: String, CaseIterable, Identifiable {
         case .more: "ellipsis.circle.fill"
         }
     }
+
+    var assetName: String {
+        switch self {
+        case .home: "nav_robot_home"
+        case .work: "nav_robot_work"
+        case .status: "nav_robot_status"
+        case .more: "nav_robot_more"
+        }
+    }
 }
 
 private enum HomeMenuDestination {
@@ -413,9 +416,16 @@ private struct HomeMenuRow: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(MaroowellTheme.yellow.opacity(0.18))
-                Image(systemName: item.symbol)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(MaroowellTheme.deepYellow)
+                if let assetName = androidAssetName(for: item.title) {
+                    Image(assetName)
+                        .resizable()
+                        .scaledToFit()
+                        .padding(8)
+                } else {
+                    Image(systemName: item.symbol)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(MaroowellTheme.deepYellow)
+                }
             }
             .frame(width: 54, height: 54)
 
@@ -451,6 +461,33 @@ private struct HomeMenuRow: View {
                 .stroke(MaroowellTheme.border.opacity(0.8), lineWidth: 1)
         }
     }
+
+    private func androidAssetName(for title: String) -> String? {
+        switch title {
+        case "배송 수량 등록": return "menu_freshbag_status"
+        case "배송 통계": return "menu_quantity_stats"
+        case "입차 스케줄": return "menu_schedule"
+        case "실시간 배송 현황": return "menu_realtime"
+        case "운수종사자 일상점검": return "menu_daily_inspection"
+        case "차량 점검 / 정비": return "menu_vehicle_maintenance"
+        case "마루웰 정보": return "menu_info"
+        case "우편번호 검색": return "menu_zipcode"
+        case "라우트 편집기": return "menu_route_editor"
+        case "쿠팡 캠프 조회": return "menu_camp"
+        case "프백 현황": return "menu_dragon_schedule"
+        case "클렌징 히스토리": return "menu_cleansing"
+        case "마루웰 라우트정보": return "menu_route_info"
+        case "마루웰 회수율": return "menu_freshbag_ratio"
+        case "마루웰 라우트 단가": return "menu_route_price"
+        case "통계조회": return "menu_stats"
+        case "용차": return "menu_dragon_car"
+        case "용차 스케줄": return "menu_quantity"
+        case "관리자 권한 관리": return "menu_admin"
+        case "PUSH 알림": return "menu_push"
+        default: return nil
+        }
+    }
+
 }
 
 private struct HomeBottomBar: View {
@@ -463,8 +500,10 @@ private struct HomeBottomBar: View {
                     selectedTab = tab
                 } label: {
                     VStack(spacing: 5) {
-                        Image(systemName: tab.symbol)
-                            .font(.system(size: 19, weight: .bold))
+                        Image(tab.assetName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 36, height: 36)
                             .scaleEffect(selectedTab == tab ? 1.06 : 1)
                         Text(tab.title)
                             .font(.system(size: 10, weight: .black))

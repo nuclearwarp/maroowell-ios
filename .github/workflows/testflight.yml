@@ -59,44 +59,16 @@ jobs:
           chmod 600 "$KEY_PATH"
           openssl pkey -in "$KEY_PATH" -noout >/dev/null
 
-      - name: Prepare Maroowell app icon and export metadata
+      - name: Validate App Store icon and export metadata
         run: |
           set -euo pipefail
-          ICON_DIR="Maroowell/Resources/Assets.xcassets/AppIcon.appiconset"
-          ICON_SOURCE="$RUNNER_TEMP/AppIconSource.webp"
-          mkdir -p "$ICON_DIR"
-          export ICON_SOURCE
-          python3 - <<'PY'
-          import base64
-          import os
-          from pathlib import Path
-
-          encoded = Path("Maroowell/Resources/AppIconSource.webp.b64").read_text(encoding="utf-8")
-          Path(os.environ["ICON_SOURCE"]).write_bytes(base64.b64decode("".join(encoded.split())))
-          PY
-          magick "$ICON_SOURCE" \
-            -resize 1024x1024! \
-            -background white \
-            -alpha remove \
-            -alpha off \
-            "PNG24:$ICON_DIR/AppIcon.png"
-          sips -g pixelWidth -g pixelHeight -g hasAlpha "$ICON_DIR/AppIcon.png"
-          cat > "$ICON_DIR/Contents.json" <<'JSON'
-          {
-            "images" : [
-              {
-                "filename" : "AppIcon.png",
-                "idiom" : "universal",
-                "platform" : "ios",
-                "size" : "1024x1024"
-              }
-            ],
-            "info" : {
-              "author" : "xcode",
-              "version" : 1
-            }
-          }
-          JSON
+          ICON_PATH="Maroowell/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
+          test -f "$ICON_PATH"
+          sips -g pixelWidth -g pixelHeight -g hasAlpha "$ICON_PATH"
+          WIDTH=$(sips -g pixelWidth "$ICON_PATH" | tail -1 | awk '{print $2}')
+          HEIGHT=$(sips -g pixelHeight "$ICON_PATH" | tail -1 | awk '{print $2}')
+          test "$WIDTH" = "1024"
+          test "$HEIGHT" = "1024"
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" Maroowell/Resources/Info.plist 2>/dev/null || \
             /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Maroowell/Resources/Info.plist
 

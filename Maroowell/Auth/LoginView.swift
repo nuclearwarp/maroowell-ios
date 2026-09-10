@@ -4,93 +4,97 @@ struct LoginView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @State private var email = ""
     @State private var password = ""
+    @State private var showPassword = false
     @State private var showPrivacyPolicy = false
     @FocusState private var focusedField: Field?
 
-    private enum Field {
-        case email
-        case password
-    }
+    private enum Field { case email, password }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                Spacer(minLength: 54)
+                Spacer(minLength: 28)
 
-                MaroowellMark(size: 96)
-                    .padding(.bottom, 24)
+                Image("MaroowellLoginLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 242, maxHeight: 218)
+                    .accessibilityLabel("마루웰")
 
-                Text("마루웰")
-                    .font(.system(size: 34, weight: .black, design: .rounded))
-                    .foregroundStyle(MaroowellTheme.ink)
+                Text("Design the Structure.\nMove the Future.")
+                    .font(.system(size: 15, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(MaroowellTheme.deepYellow)
+                    .padding(.top, 2)
+                    .padding(.bottom, 10)
 
-                Text("더 나은 배송의 하루를 함께해요")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(MaroowellTheme.muted)
-                    .padding(.top, 8)
-                    .padding(.bottom, 36)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("계정 로그인")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(MaroowellTheme.ink)
+                    Text("마루웰 계정의 이메일과 비밀번호를 입력해주세요.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(MaroowellTheme.muted)
 
-                VStack(spacing: 14) {
-                    inputField(
-                        title: "이메일",
-                        systemImage: "envelope.fill",
-                        content: {
-                            TextField("name@maroowell.com", text: $email)
-                                .textContentType(.emailAddress)
-                                .keyboardType(.emailAddress)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .focused($focusedField, equals: .email)
-                                .submitLabel(.next)
-                                .onSubmit { focusedField = .password }
+                    outlinedField(title: "이메일", focused: focusedField == .email) {
+                        TextField("이메일", text: $email)
+                            .foregroundStyle(MaroowellTheme.ink)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused($focusedField, equals: .email)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .password }
+                    }
+
+                    outlinedField(title: "비밀번호", focused: focusedField == .password) {
+                        HStack(spacing: 8) {
+                            Group {
+                                if showPassword {
+                                    TextField("비밀번호", text: $password)
+                                } else {
+                                    SecureField("비밀번호", text: $password)
+                                }                            }
+                            .foregroundStyle(MaroowellTheme.ink)
+                            .textContentType(.password)
+                            .focused($focusedField, equals: .password)
+                            .submitLabel(.go)
+                            .onSubmit { submit() }
+
+                            Button { showPassword.toggle() } label: {
+                                Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                                    .foregroundStyle(MaroowellTheme.muted)
+                            }
+                            .buttonStyle(.plain)
                         }
-                    )
+                    }
 
-                    inputField(
-                        title: "비밀번호",
-                        systemImage: "lock.fill",
-                        content: {
-                            SecureField("비밀번호", text: $password)
-                                .textContentType(.password)
-                                .focused($focusedField, equals: .password)
-                                .submitLabel(.go)
-                                .onSubmit { submit() }
-                        }
-                    )
-                }
-
-                if let error = sessionViewModel.errorMessage {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "exclamationmark.circle.fill")
+                    if let error = sessionViewModel.errorMessage {
                         Text(error)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 14)
-                }
 
-                Button(action: submit) {
-                    HStack(spacing: 10) {
-                        if sessionViewModel.isSigningIn {
-                            ProgressView()
-                                .tint(MaroowellTheme.ink)
+                    Button(action: submit) {
+                        HStack(spacing: 8) {
+                            if sessionViewModel.isSigningIn { ProgressView().tint(.white) }
+                            Text(sessionViewModel.isSigningIn ? "로그인 중..." : "로그인")
+                                .font(.system(size: 15, weight: .bold))
                         }
-                        Text(sessionViewModel.isSigningIn ? "로그인 중..." : "로그인")
-                            .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)                        .frame(height: 52)
+                        .background(Color(red: 0.08, green: 0.60, blue: 0.53), in: RoundedRectangle(cornerRadius: 16))
                     }
-                    .foregroundStyle(MaroowellTheme.ink)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(MaroowellTheme.yellow, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .disabled(sessionViewModel.isSigningIn)
                 }
-                .disabled(sessionViewModel.isSigningIn)
-                .padding(.top, 24)
-
-                Text("승인된 마루웰 계정으로 로그인해주세요.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 18)
+                .padding(16)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 20))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(MaroowellTheme.border, lineWidth: 1)
+                }
 
                 Button("개인정보 처리방침") {
                     focusedField = nil
@@ -98,17 +102,17 @@ struct LoginView: View {
                 }
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(MaroowellTheme.muted)
-                .padding(.top, 12)
+                .padding(.top, 16)
 
-                Spacer(minLength: 36)
+                Spacer(minLength: 28)
             }
             .padding(.horizontal, 28)
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity)
         }
-        .background(MaroowellTheme.background)
-        .sheet(isPresented: $showPrivacyPolicy) {
-            NavigationStack {
+        .scrollDismissesKeyboard(.interactively)
+        .background(Color.white)
+        .sheet(isPresented: $showPrivacyPolicy) {            NavigationStack {
                 PrivacyPolicyView()
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -116,33 +120,31 @@ struct LoginView: View {
                         }
                     }
             }
+            .preferredColorScheme(.light)
         }
     }
 
-    private func inputField<Content: View>(
+    private func outlinedField<Content: View>(
         title: String,
-        systemImage: String,
+        focused: Bool,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: systemImage)
-                .foregroundStyle(MaroowellTheme.deepYellow)
-                .frame(width: 22)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(MaroowellTheme.muted)
-                content()
-                    .font(.body.weight(.semibold))
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MaroowellTheme.muted)
+            content()
+                .font(.body)
+                .tint(Color(red: 0.08, green: 0.60, blue: 0.53))
         }
-        .padding(.horizontal, 18)
-        .frame(height: 72)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(MaroowellTheme.border.opacity(0.8), lineWidth: 1)
+        .padding(.horizontal, 14)
+        .frame(height: 60)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 14))        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(
+                    focused ? Color(red: 0.08, green: 0.60, blue: 0.53) : MaroowellTheme.border,
+                    lineWidth: focused ? 1.5 : 1
+                )
         }
     }
 

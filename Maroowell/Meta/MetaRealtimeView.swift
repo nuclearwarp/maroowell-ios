@@ -730,7 +730,7 @@ private final class MetaRealtimeViewModel: NSObject, ObservableObject, WKNavigat
         scriptProxy = proxy
         configuration.userContentController.add(proxy, name: Self.bridgeName)
         configuration.userContentController.addUserScript(
-            WKUserScript(source: Self.metaBridgeScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+            WKUserScript(source: Self.metaBridgeScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
         )
 
         let view = WKWebView(frame: .zero, configuration: configuration)
@@ -857,24 +857,35 @@ private final class MetaRealtimeViewModel: NSObject, ObservableObject, WKNavigat
     }
 
     private func loadSchedule(campCode: String, wave: String, scheduleDate: String) async throws -> [String: Any] {
-        let session = try await SupabaseService.shared.client.auth.session
-        let url = AppConfig.supabaseURL.appendingPathComponent("rest/v1/rpc/mw_meta_realtime_schedule")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 25
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
-        request.setValue(AppConfig.supabasePublishableKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
+        let client = SupabaseService.shared.client
+        let body = try JSONSerialization.data(withJSONObject: [
             "p_camp_code": campCode,
             "p_wave": wave,
             "p_schedule_date": scheduleDate
         ])
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw MetaRealtimeError.invalidScheduleResponse }
+        func perform(accessToken: String) async throws -> (Data, HTTPURLResponse) {
+            let url = AppConfig.supabaseURL.appendingPathComponent("rest/v1/rpc/mw_meta_realtime_schedule")
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 25
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            request.setValue(AppConfig.supabasePublishableKey, forHTTPHeaderField: "apikey")
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.httpBody = body
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw MetaRealtimeError.invalidScheduleResponse }
+            return (data, http)
+        }
+
+        var session = try await client.auth.session
+        var (data, http) = try await perform(accessToken: session.accessToken)
+        if http.statusCode == 401 || http.statusCode == 403 {
+            session = try await client.auth.refreshSession()
+            (data, http) = try await perform(accessToken: session.accessToken)
+        }
         guard (200...299).contains(http.statusCode) else {
             throw MetaRealtimeError.scheduleServer(http.statusCode)
         }
