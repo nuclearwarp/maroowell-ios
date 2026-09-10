@@ -76,8 +76,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p Maroowell/Resources
-          curl -fL "https://raw.githubusercontent.com/nuclearwarp/maroowell-android/main/app/src/main/res/drawable-nodpi/maroowell_login_loading4.gif" -o Maroowell/Resources/maroowell_login_loading4.gif
-          curl -fL "https://raw.githubusercontent.com/nuclearwarp/maroowell-android/main/app/src/main/res/font/mungyeong_gamhong.ttf" -o Maroowell/Resources/mungyeong_gamhong.ttf
+          curl --fail --location --retry 3 \
+            -H "Accept: application/vnd.github.raw+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/nuclearwarp/maroowell-android/git/blobs/5a3bbea090c6b2ae5088fea2c9e565c790935171" \
+            -o Maroowell/Resources/maroowell_login_loading4.gif
+          curl --fail --location --retry 3 \
+            -H "Accept: application/vnd.github.raw+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/nuclearwarp/maroowell-android/git/blobs/ceb6982e1f748467375258bf59bc53d796314134" \
+            -o Maroowell/Resources/mungyeong_gamhong.ttf
+          file Maroowell/Resources/maroowell_login_loading4.gif
+          file Maroowell/Resources/mungyeong_gamhong.ttf
           test -s Maroowell/Resources/maroowell_login_loading4.gif
           test -s Maroowell/Resources/mungyeong_gamhong.ttf
 
