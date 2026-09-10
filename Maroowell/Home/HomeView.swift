@@ -146,8 +146,18 @@ struct HomeView: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(MaroowellTheme.ink)
                 .lineLimit(1)
+            Button {
+                Task { await sessionViewModel.signOut() }
+            } label: {
+                Text("로그아웃")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(MaroowellTheme.muted)
+                    .padding(.horizontal, 8)
+                    .frame(height: 40)
+            }
+            .buttonStyle(.plain)
         }
-        .frame(height: 42)
+        .frame(height: 48)
     }
 
     private var settlementHero: some View {
