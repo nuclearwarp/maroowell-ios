@@ -1,4 +1,4 @@
-# Fresh TestFlight deployment trigger 2026-09-10
+# TestFlight deployment
 name: TestFlight Deploy
 
 on:
@@ -36,7 +36,6 @@ jobs:
           set -euo pipefail
           KEY_DIR="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$KEY_DIR"
-          RAW_KEY_PATH="$KEY_DIR/AuthKey_${APPSTORE_KEY_ID}_raw.p8"
           KEY_PATH="$KEY_DIR/AuthKey_${APPSTORE_KEY_ID}.p8"
           python3 - <<'PY'
           import os
@@ -50,14 +49,11 @@ jobs:
               raw = f"-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n"
           elif not raw.endswith("\n"):
               raw += "\n"
-          path = Path(os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{os.environ['APPSTORE_KEY_ID']}_raw.p8"))
+          path = Path(os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{os.environ['APPSTORE_KEY_ID']}.p8"))
           path.write_text(raw, encoding="utf-8")
           PY
-          chmod 600 "$RAW_KEY_PATH"
-          openssl pkey -in "$RAW_KEY_PATH" -noout >/dev/null
-          openssl ec -in "$RAW_KEY_PATH" -out "$KEY_PATH" >/dev/null 2>&1
           chmod 600 "$KEY_PATH"
-          openssl ec -in "$KEY_PATH" -check -noout >/dev/null 2>&1
+          openssl pkey -in "$KEY_PATH" -noout >/dev/null
 
       - name: Prepare App Store icon and export metadata
         run: |
@@ -118,7 +114,7 @@ jobs:
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             archive
 
-      - name: Cloud sign and upload to TestFlight
+      - name: Export signed IPA
         env:
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
@@ -133,7 +129,7 @@ jobs:
             <key>method</key>
             <string>app-store-connect</string>
             <key>destination</key>
-            <string>upload</string>
+            <string>export</string>
             <key>signingStyle</key>
             <string>automatic</string>
             <key>teamID</key>
@@ -147,6 +143,7 @@ jobs:
           PLIST
           rm -rf "$RUNNER_TEMP/TestFlightExport"
           mkdir -p "$RUNNER_TEMP/TestFlightExport"
+          set +e
           xcodebuild \
             -exportArchive \
             -archivePath "$RUNNER_TEMP/Maroowell.xcarchive" \
@@ -155,4 +152,55 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$KEY_PATH" \
             -authenticationKeyID "$APPSTORE_KEY_ID" \
-            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID"
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/export.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Validate and upload to TestFlight
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          IPA="$(find "$RUNNER_TEMP/TestFlightExport" -maxdepth 2 -name '*.ipa' -print -quit)"
+          test -n "$IPA"
+          echo "IPA: $IPA"
+
+          set +e
+          xcrun altool --validate-app \
+            --type ios \
+            --file "$IPA" \
+            --apiKey "$APPSTORE_KEY_ID" \
+            --apiIssuer "$APPSTORE_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/validate.log"
+          validate_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$validate_status" -ne 0 ]; then
+            exit "$validate_status"
+          fi
+
+          set +e
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$IPA" \
+            --apiKey "$APPSTORE_KEY_ID" \
+            --apiIssuer "$APPSTORE_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/upload.log"
+          upload_status=${PIPESTATUS[0]}
+          set -e
+          exit "$upload_status"
+
+      - name: Keep TestFlight diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-diagnostics-${{ github.run_number }}
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/export.log
+            ${{ runner.temp }}/validate.log
+            ${{ runner.temp }}/upload.log
+            ${{ runner.temp }}/ExportOptions.plist
+            ${{ runner.temp }}/TestFlightExport/*.ipa
