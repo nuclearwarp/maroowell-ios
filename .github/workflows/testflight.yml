@@ -26,7 +26,7 @@ jobs:
         run: xcodebuild -version
 
       - name: Install build tools
-        run: brew install xcodegen imagemagick
+        run: brew install xcodegen imagemagick apktool
 
       - name: Configure App Store Connect API key
         env:
@@ -76,33 +76,17 @@ jobs:
           set -euo pipefail
           mkdir -p Maroowell/Resources
           APK="$RUNNER_TEMP/Maroowell-1.4.8.apk"
+          DECODED="$RUNNER_TEMP/maroowell-apk"
           curl --fail --location --retry 3 \
             "https://maroowell-app-download.brain-0f6.workers.dev/downloads/Maroowell-1.4.8.apk" \
             -o "$APK"
-          export APK
-          python3 - <<'PY'
-          import os
-          import zipfile
-          from pathlib import Path
-
-          apk = Path(os.environ["APK"])
-          out_dir = Path("Maroowell/Resources")
-          targets = {
-              1_988_072: out_dir / "maroowell_login_loading4.gif",
-              751_144: out_dir / "mungyeong_gamhong.ttf",
-          }
-          found = {}
-          with zipfile.ZipFile(apk) as zf:
-              for info in zf.infolist():
-                  if info.file_size in targets and info.file_size not in found:
-                      data = zf.read(info)
-                      targets[info.file_size].write_bytes(data)
-                      found[info.file_size] = info.filename
-          for size, dest in targets.items():
-              if size not in found:
-                  raise SystemExit(f"APK resource with uncompressed size {size} not found")
-              print(f"Extracted {found[size]} -> {dest} ({dest.stat().st_size} bytes)")
-          PY
+          apktool d -f -s "$APK" -o "$DECODED"
+          GIF_PATH="$(find "$DECODED/res" -type f -name 'maroowell_login_loading4.*' -print -quit)"
+          FONT_PATH="$(find "$DECODED/res" -type f -name 'mungyeong_gamhong.*' -print -quit)"
+          test -n "$GIF_PATH"
+          test -n "$FONT_PATH"
+          cp "$GIF_PATH" Maroowell/Resources/maroowell_login_loading4.gif
+          cp "$FONT_PATH" Maroowell/Resources/mungyeong_gamhong.ttf
           file Maroowell/Resources/maroowell_login_loading4.gif
           file Maroowell/Resources/mungyeong_gamhong.ttf
           test -s Maroowell/Resources/maroowell_login_loading4.gif
