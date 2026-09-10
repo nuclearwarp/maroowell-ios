@@ -55,9 +55,9 @@ jobs:
           PY
           chmod 600 "$RAW_KEY_PATH"
           openssl pkey -in "$RAW_KEY_PATH" -noout >/dev/null
-          openssl ec -in "$RAW_KEY_PATH" -out "$KEY_PATH" >/dev/null 2>&1
+          openssl pkcs8 -topk8 -nocrypt -in "$RAW_KEY_PATH" -out "$KEY_PATH" >/dev/null 2>&1
           chmod 600 "$KEY_PATH"
-          openssl ec -in "$KEY_PATH" -check -noout >/dev/null 2>&1
+          openssl pkey -in "$KEY_PATH" -noout >/dev/null
 
       - name: Prepare App Store icon and export metadata
         run: |
