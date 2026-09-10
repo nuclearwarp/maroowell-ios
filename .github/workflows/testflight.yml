@@ -58,6 +58,63 @@ jobs:
           chmod 600 "$KEY_PATH"
           openssl pkey -in "$KEY_PATH" -noout >/dev/null
 
+      - name: Free stale development certificate slot
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+          export KEY_PATH
+          cat > "$RUNNER_TEMP/free-dev-cert.mjs" <<'JS'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+
+          const keyId = process.env.APPSTORE_KEY_ID;
+          const issuer = process.env.APPSTORE_ISSUER_ID;
+          const pem = fs.readFileSync(process.env.KEY_PATH, 'utf8');
+          const enc = value => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString('base64url');
+          const now = Math.floor(Date.now() / 1000);
+          const header = enc({ alg: 'ES256', kid: keyId, typ: 'JWT' });
+          const payload = enc({ iss: issuer, iat: now - 30, exp: now + 900, aud: 'appstoreconnect-v1' });
+          const input = `${header}.${payload}`;
+          const sig = crypto.sign('sha256', Buffer.from(input), { key: pem, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+          const token = `${input}.${sig}`;
+
+          async function request(path, options = {}) {
+            const response = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
+              ...options,
+              headers: { Authorization: `Bearer ${token}`, ...(options.headers || {}) }
+            });
+            const text = await response.text();
+            if (!response.ok) throw new Error(`ASC HTTP ${response.status}: ${text}`);
+            return text ? JSON.parse(text) : null;
+          }
+
+          const result = await request('/v1/certificates?limit=200');
+          const activeDevelopment = (result?.data || [])
+            .filter(item => String(item.attributes?.certificateType || '').includes('DEVELOPMENT'))
+            .filter(item => new Date(item.attributes?.expirationDate || 0).getTime() > Date.now())
+            .sort((a, b) => new Date(a.attributes.expirationDate) - new Date(b.attributes.expirationDate));
+
+          console.log('Active development certificates:', activeDevelopment.map(item => ({
+            id: item.id,
+            type: item.attributes?.certificateType,
+            name: item.attributes?.name,
+            expirationDate: item.attributes?.expirationDate
+          })));
+
+          if (activeDevelopment.length >= 3) {
+            const stale = activeDevelopment[0];
+            console.log(`Revoking oldest development certificate ${stale.id} (${stale.attributes?.expirationDate})`);
+            await request(`/v1/certificates/${stale.id}`, { method: 'DELETE' });
+            console.log('Development certificate slot released.');
+          } else {
+            console.log('Development certificate count is below the usual limit; no certificate revoked.');
+          }
+          JS
+          node "$RUNNER_TEMP/free-dev-cert.mjs"
+
       - name: Validate App Store icon and export metadata
         run: |
           set -euo pipefail
