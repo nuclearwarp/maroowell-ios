@@ -4,40 +4,79 @@ on:
   workflow_run:
     workflows: ["TestFlight Deploy"]
     types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/attach-testflight.yml"
 
 permissions:
   contents: read
 
 jobs:
   attach:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
       APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
       APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
-      TESTFLIGHT_BUILD_NUMBER: ${{ github.event.workflow_run.run_number }}
-      APP_BUNDLE_ID: com.maroowell.app
-      BETA_GROUP_NAME: Maroowell Test
+      WORKFLOW_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+      APP_ID: "6809853034"
+      BETA_GROUP_ID: "2acd0101-0920-4a97-9691-de3931fd491b"
+      BETA_GROUP_NAME: "Maroowell Test"
 
     steps:
+      - name: Normalize App Store Connect key
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_KEY_PATH="$RUNNER_TEMP/AuthKey_raw.p8"
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          export RAW_KEY_PATH KEY_PATH
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          raw = os.environ["APPSTORE_PRIVATE_KEY"].strip()
+          raw = raw.replace("\\n", "\n").replace("\r", "")
+          raw = raw.strip().strip('"').strip("'").strip()
+          if "-----BEGIN PRIVATE KEY-----" not in raw and "-----BEGIN EC PRIVATE KEY-----" not in raw:
+              body = "".join(raw.split())
+              raw = f"-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n"
+          elif not raw.endswith("\n"):
+              raw += "\n"
+          Path(os.environ["RAW_KEY_PATH"]).write_text(raw, encoding="utf-8")
+          PY
+          chmod 600 "$RAW_KEY_PATH"
+          openssl pkey -in "$RAW_KEY_PATH" -noout >/dev/null
+          openssl pkcs8 -topk8 -nocrypt -in "$RAW_KEY_PATH" -out "$KEY_PATH" >/dev/null 2>&1
+          chmod 600 "$KEY_PATH"
+          openssl pkey -in "$KEY_PATH" -noout >/dev/null
+
       - name: Attach uploaded build to internal TestFlight group
         shell: bash
         run: |
           set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            TESTFLIGHT_BUILD_NUMBER="21"
+          else
+            TESTFLIGHT_BUILD_NUMBER="$WORKFLOW_RUN_NUMBER"
+          fi
+          export TESTFLIGHT_BUILD_NUMBER
+          export APPSTORE_PRIVATE_KEY_FILE="$RUNNER_TEMP/AuthKey.p8"
+
           cat > "$RUNNER_TEMP/attach-testflight.mjs" <<'JS'
+          import fs from 'node:fs';
           import crypto from 'node:crypto';
 
           const keyId = process.env.APPSTORE_KEY_ID;
           const issuerId = process.env.APPSTORE_ISSUER_ID;
-          const bundleId = process.env.APP_BUNDLE_ID;
+          const appId = process.env.APP_ID;
+          const groupId = process.env.BETA_GROUP_ID;
           const groupName = process.env.BETA_GROUP_NAME;
           const buildNumber = process.env.TESTFLIGHT_BUILD_NUMBER;
-          let pem = process.env.APPSTORE_PRIVATE_KEY.trim()
-            .replace(/\\n/g, '\n')
-            .replace(/\r/g, '')
-            .replace(/^['"]|['"]$/g, '');
+          const pem = fs.readFileSync(process.env.APPSTORE_PRIVATE_KEY_FILE, 'utf8');
 
           const enc = (value) => Buffer.from(
             typeof value === 'string' ? value : JSON.stringify(value)
@@ -77,25 +116,19 @@ jobs:
           }
 
           const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-          const encodedBundleId = encodeURIComponent(bundleId);
-          const apps = await request(`/v1/apps?filter[bundleId]=${encodedBundleId}&limit=1`);
-          if (!apps?.data?.length) throw new Error(`App not found: ${bundleId}`);
-          const appId = apps.data[0].id;
-
-          const groups = await request(`/v1/betaGroups?filter[app]=${encodeURIComponent(appId)}&limit=200`);
-          const group = groups?.data?.find((item) => item.attributes?.name === groupName);
-          if (!group) throw new Error(`Beta group not found: ${groupName}`);
-
           let build = null;
+
           for (let attempt = 1; attempt <= 40; attempt++) {
             const builds = await request(
               `/v1/builds?filter[app]=${encodeURIComponent(appId)}&filter[version]=${encodeURIComponent(buildNumber)}&limit=20`
             );
             build = builds?.data?.find((item) => item.attributes?.version === buildNumber) ?? null;
+
             if (build?.attributes?.processingState === 'VALID') break;
             if (build?.attributes?.processingState === 'FAILED') {
               throw new Error(`Build ${buildNumber} processing failed in App Store Connect`);
             }
+
             console.log(`Waiting for build ${buildNumber} processing (${attempt}/40)...`);
             await sleep(15000);
           }
@@ -106,7 +139,7 @@ jobs:
           }
 
           try {
-            await request(`/v1/betaGroups/${group.id}/relationships/builds`, {
+            await request(`/v1/betaGroups/${groupId}/relationships/builds`, {
               method: 'POST',
               body: JSON.stringify({ data: [{ type: 'builds', id: build.id }] })
             });
@@ -119,4 +152,5 @@ jobs:
             }
           }
           JS
+
           node "$RUNNER_TEMP/attach-testflight.mjs"
