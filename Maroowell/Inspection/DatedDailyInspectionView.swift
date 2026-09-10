@@ -33,6 +33,12 @@ struct DatedDailyInspectionView: View {
         .navigationTitle("일상점검")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { load() }
+        .onChange(of: profile) { _, newProfile in
+            store.saveProfile(newProfile)
+        }
+        .onDisappear {
+            store.saveProfile(profile)
+        }
         .alert("마루웰", isPresented: $showMessage) {
             Button("확인", role: .cancel) {}
         } message: {

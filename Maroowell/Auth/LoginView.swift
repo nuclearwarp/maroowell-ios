@@ -55,7 +55,8 @@ struct LoginView: View {
                                     TextField("비밀번호", text: $password)
                                 } else {
                                     SecureField("비밀번호", text: $password)
-                                }                            }
+                                }
+                            }
                             .foregroundStyle(MaroowellTheme.ink)
                             .textContentType(.password)
                             .focused($focusedField, equals: .password)
@@ -79,12 +80,15 @@ struct LoginView: View {
 
                     Button(action: submit) {
                         HStack(spacing: 8) {
-                            if sessionViewModel.isSigningIn { ProgressView().tint(.white) }
+                            if sessionViewModel.isSigningIn {
+                                ProgressView().tint(.white)
+                            }
                             Text(sessionViewModel.isSigningIn ? "로그인 중..." : "로그인")
                                 .font(.system(size: 15, weight: .bold))
                         }
                         .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)                        .frame(height: 52)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
                         .background(Color(red: 0.08, green: 0.60, blue: 0.53), in: RoundedRectangle(cornerRadius: 16))
                     }
                     .disabled(sessionViewModel.isSigningIn)
@@ -112,7 +116,22 @@ struct LoginView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(Color.white)
-        .sheet(isPresented: $showPrivacyPolicy) {            NavigationStack {
+        .overlay {
+            if sessionViewModel.isSigningIn {
+                ZStack {
+                    Color.white.ignoresSafeArea()
+                    MaroowellLoadingGIFView()
+                        .frame(width: 286, height: 286)
+                        .accessibilityLabel("로그인 중")
+                }
+                .transition(.opacity)
+                .zIndex(100)
+                .allowsHitTesting(true)
+            }
+        }
+        .animation(.easeInOut(duration: 0.16), value: sessionViewModel.isSigningIn)
+        .sheet(isPresented: $showPrivacyPolicy) {
+            NavigationStack {
                 PrivacyPolicyView()
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -139,7 +158,8 @@ struct LoginView: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 60)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 14))        .overlay {
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+        .overlay {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(
                     focused ? Color(red: 0.08, green: 0.60, blue: 0.53) : MaroowellTheme.border,

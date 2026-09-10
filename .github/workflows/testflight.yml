@@ -72,6 +72,15 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" Maroowell/Resources/Info.plist 2>/dev/null || \
             /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Maroowell/Resources/Info.plist
 
+      - name: Prepare Android brand resources
+        run: |
+          set -euo pipefail
+          mkdir -p Maroowell/Resources
+          curl -fL "https://raw.githubusercontent.com/nuclearwarp/maroowell-android/main/app/src/main/res/drawable-nodpi/maroowell_login_loading4.gif" -o Maroowell/Resources/maroowell_login_loading4.gif
+          curl -fL "https://raw.githubusercontent.com/nuclearwarp/maroowell-android/main/app/src/main/res/font/mungyeong_gamhong.ttf" -o Maroowell/Resources/mungyeong_gamhong.ttf
+          test -s Maroowell/Resources/maroowell_login_loading4.gif
+          test -s Maroowell/Resources/mungyeong_gamhong.ttf
+
       - name: Generate Xcode project
         run: xcodegen generate
 

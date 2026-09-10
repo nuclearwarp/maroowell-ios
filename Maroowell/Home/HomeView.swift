@@ -131,9 +131,10 @@ struct HomeView: View {
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
             HStack(spacing: 7) {
-                Text("마루웰")
-                    .font(.headline.weight(.black))
-                    .foregroundStyle(MaroowellTheme.deepYellow)
+                Text("MAROOWELL")
+                    .font(MaroowellBrandFont.font(size: 17))
+                    .tracking(1.35)
+                    .foregroundStyle(Color(red: 1.0, green: 0.77, blue: 0.0))
                 Text("iOS v1.0")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(MaroowellTheme.muted)
@@ -504,7 +505,6 @@ private struct HomeMenuRow: View {
         default: return nil
         }
     }
-
 }
 
 private struct HomeBottomBar: View {

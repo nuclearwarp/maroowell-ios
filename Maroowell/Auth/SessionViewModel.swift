@@ -17,6 +17,7 @@ final class SessionViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let client = SupabaseService.shared.client
+    private let minimumLoginLoadingDuration: TimeInterval = 4.0
 
     init() {
         Task { await restoreSession() }
@@ -41,6 +42,7 @@ final class SessionViewModel: ObservableObject {
             return
         }
 
+        let loadingStartedAt = Date()
         isSigningIn = true
         errorMessage = nil
         defer { isSigningIn = false }
@@ -50,7 +52,14 @@ final class SessionViewModel: ObservableObject {
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password
             )
-            session = try await makeValidatedSession()
+            let validatedSession = try await makeValidatedSession()
+
+            let remaining = minimumLoginLoadingDuration - Date().timeIntervalSince(loadingStartedAt)
+            if remaining > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+            }
+
+            session = validatedSession
         } catch {
             if error is MaroowellAuthError {
                 try? await client.auth.signOut()

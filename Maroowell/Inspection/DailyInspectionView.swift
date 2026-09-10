@@ -39,8 +39,16 @@ struct DailyInspectionView: View {
         .navigationTitle("운수종사자 일상점검")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            profile = store.loadProfile()
+            signature = store.loadSignature()
             loadSelectedDay()
             profileCollapsed = profile.isComplete
+        }
+        .onChange(of: profile) { _, newProfile in
+            store.saveProfile(newProfile)
+        }
+        .onDisappear {
+            store.saveProfile(profile)
         }
         .alert("마루웰", isPresented: $showMessage) {
             Button("확인", role: .cancel) {}
