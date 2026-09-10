@@ -31,14 +31,14 @@ struct HomeView: View {
 
     private var dashboard: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 10) {
                 header
                 settlementHero
                 HomeCalendarView(scheduleStore: homeScheduleStore)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 16)
-            .padding(.bottom, 28)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+            .padding(.bottom, 20)
         }
         .background(MaroowellTheme.background)
     }
@@ -129,35 +129,42 @@ struct HomeView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 10) {
-            HStack(spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
+            HStack(spacing: 7) {
                 Text("마루웰")
                     .font(.headline.weight(.black))
                     .foregroundStyle(MaroowellTheme.deepYellow)
                 Text("iOS v1.0")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(MaroowellTheme.muted)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
                     .background(Color.white, in: Capsule())
             }
-            Spacer()
+            Spacer(minLength: 6)
             Text(session.displayName)
-                .font(.subheadline.weight(.bold))
+                .font(.caption.weight(.bold))
                 .foregroundStyle(MaroowellTheme.ink)
                 .lineLimit(1)
+                .minimumScaleFactor(0.72)
             Button {
                 Task { await sessionViewModel.signOut() }
             } label: {
-                Text("로그아웃")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(MaroowellTheme.muted)
-                    .padding(.horizontal, 8)
-                    .frame(height: 40)
+                Label("로그아웃", systemImage: "rectangle.portrait.and.arrow.right")
+                    .font(.system(size: 10.5, weight: .black))
+                    .foregroundStyle(Color.red.opacity(0.82))
+                    .padding(.horizontal, 9)
+                    .frame(height: 32)
+                    .background(Color.white, in: Capsule())
+                    .overlay {
+                        Capsule().stroke(Color.red.opacity(0.18), lineWidth: 1)
+                    }
             }
             .buttonStyle(.plain)
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(2)
         }
-        .frame(height: 48)
+        .frame(height: 38)
     }
 
     private var settlementHero: some View {
@@ -170,7 +177,7 @@ struct HomeView: View {
         let projected = average * Int64(projectedDates.count)
         let remaining = scheduledDates.subtracting(actualDates).count
 
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("\(summary.startDate.compactMD) ~ \(summary.endDate.compactMD)")
                     .font(.caption2.weight(.bold))
@@ -179,12 +186,12 @@ struct HomeView: View {
                 Text(roleLabel)
                     .font(.caption2.weight(.black))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
                     .background(Color.white.opacity(0.14), in: Capsule())
             }
 
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
                 heroMetric(
                     title: "누적 정산액",
                     value: summary.total.krw,
@@ -192,7 +199,7 @@ struct HomeView: View {
                 )
                 Rectangle()
                     .fill(Color.white.opacity(0.24))
-                    .frame(width: 1, height: 68)
+                    .frame(width: 1, height: 54)
                 heroMetric(
                     title: "예상 정산액",
                     value: projected.krw,
@@ -211,20 +218,20 @@ struct HomeView: View {
                     Text("등록 \(summary.days)일")
                 }
             }
-            .font(.caption.weight(.bold))
+            .font(.caption2.weight(.bold))
             .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .frame(height: 36)
-            .background(Color.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(Color.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        .padding(18)
+        .padding(14)
         .background(
             LinearGradient(
                 colors: [Color(red: 0.19, green: 0.35, blue: 0.39), Color(red: 0.26, green: 0.47, blue: 0.50)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             ),
-            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
     }
 
@@ -261,17 +268,17 @@ struct HomeView: View {
     }
 
     private func heroMetric(title: String, value: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.caption.weight(.bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.white.opacity(0.76))
             Text(value)
-                .font(.system(size: 22, weight: .black, design: .rounded))
+                .font(.system(size: 20, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
             Text(detail)
-                .font(.system(size: 9.5, weight: .medium))
+                .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.white.opacity(0.74))
                 .lineLimit(1)
                 .minimumScaleFactor(0.64)
