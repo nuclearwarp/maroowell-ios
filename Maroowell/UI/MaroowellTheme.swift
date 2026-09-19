@@ -1,8 +1,15 @@
 import SwiftUI
 
 enum MaroowellTheme {
-    static let yellow = Color(red: 0.145, green: 0.388, blue: 0.922)
-    static let deepYellow = Color(red: 0.114, green: 0.306, blue: 0.847)
+    static let primary = Color(red: 0.145, green: 0.388, blue: 0.922)       // #2563EB
+    static let primaryDark = Color(red: 0.114, green: 0.306, blue: 0.847)   // #1D4ED8
+    static let primarySoft = Color(red: 0.937, green: 0.965, blue: 1.0)     // #EFF6FF
+    static let primaryBorder = Color(red: 0.576, green: 0.773, blue: 0.992) // #93C5FD
+    static let logoGold = Color(red: 1.0, green: 0.773, blue: 0.043)        // #FFC50B
+
+    // Backward-compatible aliases for existing views.
+    static let yellow = primary
+    static let deepYellow = primaryDark
     static let background = Color(red: 0.961, green: 0.969, blue: 0.976)
     static let card = Color.white
     static let ink = Color(red: 0.10, green: 0.11, blue: 0.13)

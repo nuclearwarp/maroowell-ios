@@ -26,7 +26,7 @@ struct LoginView: View {
                 Text("Design the Structure.\nMove the Future.")
                     .font(.system(size: 15, weight: .bold))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(MaroowellTheme.deepYellow)
+                    .foregroundStyle(MaroowellTheme.logoGold)
                     .padding(.top, 2)
                     .padding(.bottom, 10)
 
@@ -110,7 +110,7 @@ struct LoginView: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
-                        .background(Color(red: 0.08, green: 0.60, blue: 0.53), in: RoundedRectangle(cornerRadius: 16))
+                        .background(MaroowellTheme.primary, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .disabled(sessionViewModel.isSigningIn)
                 }
@@ -180,7 +180,7 @@ struct LoginView: View {
                 .foregroundStyle(MaroowellTheme.muted)
             content()
                 .font(.body)
-                .tint(Color(red: 0.08, green: 0.60, blue: 0.53))
+                .tint(MaroowellTheme.primary)
         }
         .padding(.horizontal, 14)
         .frame(height: 60)
@@ -188,7 +188,7 @@ struct LoginView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(
-                    focused ? Color(red: 0.08, green: 0.60, blue: 0.53) : MaroowellTheme.border,
+                    focused ? MaroowellTheme.primary : MaroowellTheme.border,
                     lineWidth: focused ? 1.5 : 1
                 )
         }

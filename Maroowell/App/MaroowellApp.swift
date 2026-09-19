@@ -9,7 +9,7 @@ struct MaroowellApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(sessionViewModel)
-                .tint(MaroowellTheme.yellow)
+                .tint(MaroowellTheme.primary)
                 .preferredColorScheme(.light)
         }
     }

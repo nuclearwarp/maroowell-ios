@@ -175,7 +175,7 @@ struct FreshbagRatioView: View {
                     .frame(height: 44)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color(red: 0.15, green: 0.39, blue: 0.87))
+                .tint(MaroowellTheme.primary)
                 .disabled(store.isLoading)
 
                 Button {

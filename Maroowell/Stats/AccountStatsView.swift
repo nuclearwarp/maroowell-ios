@@ -145,7 +145,7 @@ struct AccountStatsView: View {
                         .frame(height: 44)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(Color(red: 0.12, green: 0.43, blue: 0.38))
+                    .tint(MaroowellTheme.primary)
                     .disabled(store.isLoading)
 
                     Button {
@@ -220,7 +220,7 @@ struct AccountStatsView: View {
                 Spacer()
                 Image(systemName: "chart.bar.xaxis")
                     .font(.system(size: 25, weight: .bold))
-                    .foregroundStyle(Color(red: 0.12, green: 0.43, blue: 0.38))
+                    .foregroundStyle(MaroowellTheme.primary)
             }
 
             HStack(spacing: 7) {
@@ -231,7 +231,7 @@ struct AccountStatsView: View {
 
             Text("일평균 \(AccountStatsFormat.decimal(snapshot.total.average))")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(Color(red: 0.12, green: 0.43, blue: 0.38))
+                .foregroundStyle(MaroowellTheme.primary)
         }
         .padding(14)
         .background(Color(red: 0.94, green: 0.98, blue: 0.97), in: RoundedRectangle(cornerRadius: 19, style: .continuous))

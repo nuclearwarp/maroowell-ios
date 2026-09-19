@@ -549,7 +549,7 @@ private struct HomeBottomBar: View {
                         Text(tab.title)
                             .font(.system(size: 10, weight: .black))
                     }
-                    .foregroundStyle(selectedTab == tab ? Color(red: 0.08, green: 0.60, blue: 0.53) : MaroowellTheme.muted)
+                    .foregroundStyle(selectedTab == tab ? MaroowellTheme.primary : MaroowellTheme.muted)
                     .frame(maxWidth: .infinity)
                     .frame(height: 58)
                     .overlay(alignment: .top) {
