@@ -50,25 +50,6 @@ struct LoginView: View {
                             .onSubmit { focusedField = .password }
                     }
 
-                    Button {
-                        rememberEmail.toggle()
-                        if !rememberEmail {
-                            savedEmail = ""
-                        }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: rememberEmail ? "checkmark.square.fill" : "square")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(rememberEmail ? MaroowellTheme.deepYellow : MaroowellTheme.muted)
-                            Text("아이디 저장")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(MaroowellTheme.ink)
-                            Spacer()
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-
                     outlinedField(title: "비밀번호", focused: focusedField == .password) {
                         HStack(spacing: 8) {
                             Group {
@@ -91,6 +72,25 @@ struct LoginView: View {
                             .buttonStyle(.plain)
                         }
                     }
+
+                    Button {
+                        rememberEmail.toggle()
+                        if !rememberEmail {
+                            savedEmail = ""
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: rememberEmail ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(rememberEmail ? MaroowellTheme.deepYellow : MaroowellTheme.muted)
+                            Text("아이디 저장")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(MaroowellTheme.ink)
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
 
                     if let error = sessionViewModel.errorMessage {
                         Text(error)
