@@ -139,11 +139,13 @@ struct LoginView: View {
         .background(Color.white)
         .overlay {
             if sessionViewModel.isSigningIn {
-                ZStack {
-                    Color.white.ignoresSafeArea()
-                    MaroowellLoadingGIFView()
-                        .frame(width: 286, height: 286)
-                        .accessibilityLabel("로그인 중")
+                GeometryReader { proxy in
+                    ZStack {
+                        Color.white.ignoresSafeArea()
+                        MaroowellLoadingGIFView()
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                            .accessibilityLabel("로그인 중")
+                    }
                 }
                 .transition(.opacity)
                 .zIndex(100)
