@@ -9,10 +9,11 @@ final class QuantityViewModel: ObservableObject {
 
     private let store: QuantityStore
 
-    init(store: QuantityStore = .shared, date: Date = .now) {
-        self.store = store
+    init(store: QuantityStore? = nil, date: Date = .now) {
+        let resolvedStore = store ?? .shared
+        self.store = resolvedStore
         self.selectedDate = date
-        let record = store.load(date)
+        let record = resolvedStore.load(date)
         self.routes = record?.routes.isEmpty == false ? record!.routes : [Self.emptyRoute()]
         self.memo = record?.memo ?? ""
     }
