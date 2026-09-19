@@ -6,6 +6,8 @@ struct LoginView: View {
     @State private var password = ""
     @State private var showPassword = false
     @State private var showPrivacyPolicy = false
+    @AppStorage("maroowell.rememberEmail") private var rememberEmail = false
+    @AppStorage("maroowell.savedEmail") private var savedEmail = ""
     @FocusState private var focusedField: Field?
 
     private enum Field { case email, password }
@@ -47,6 +49,25 @@ struct LoginView: View {
                             .submitLabel(.next)
                             .onSubmit { focusedField = .password }
                     }
+
+                    Button {
+                        rememberEmail.toggle()
+                        if !rememberEmail {
+                            savedEmail = ""
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: rememberEmail ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(rememberEmail ? MaroowellTheme.deepYellow : MaroowellTheme.muted)
+                            Text("아이디 저장")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(MaroowellTheme.ink)
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
 
                     outlinedField(title: "비밀번호", focused: focusedField == .password) {
                         HStack(spacing: 8) {
@@ -130,6 +151,11 @@ struct LoginView: View {
             }
         }
         .animation(.easeInOut(duration: 0.16), value: sessionViewModel.isSigningIn)
+        .onAppear {
+            if rememberEmail, !savedEmail.isEmpty {
+                email = savedEmail
+            }
+        }
         .sheet(isPresented: $showPrivacyPolicy) {
             NavigationStack {
                 PrivacyPolicyView()
@@ -170,8 +196,15 @@ struct LoginView: View {
 
     private func submit() {
         focusedField = nil
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
-            await sessionViewModel.signIn(email: email, password: password)
+            await sessionViewModel.signIn(email: normalizedEmail, password: password)
+            guard sessionViewModel.session != nil else { return }
+            if rememberEmail {
+                savedEmail = normalizedEmail
+            } else {
+                savedEmail = ""
+            }
         }
     }
 }
