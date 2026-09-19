@@ -97,21 +97,23 @@ jobs:
             .filter(item => new Date(item.attributes?.expirationDate || 0).getTime() > Date.now())
             .sort((a, b) => new Date(a.attributes.expirationDate) - new Date(b.attributes.expirationDate));
 
+          const ciGenerated = activeDevelopment.filter(
+            item => String(item.attributes?.name || '').trim() === 'Apple Development: Created via API'
+          );
+
           console.log('Active development certificates:', activeDevelopment.map(item => ({
             id: item.id,
             type: item.attributes?.certificateType,
             name: item.attributes?.name,
             expirationDate: item.attributes?.expirationDate
           })));
+          console.log('Revoking ' + ciGenerated.length + ' stale CI-generated development certificate(s).');
 
-          if (activeDevelopment.length >= 3) {
-            const stale = activeDevelopment[0];
-            console.log(`Revoking oldest development certificate ${stale.id} (${stale.attributes?.expirationDate})`);
-            await request(`/v1/certificates/${stale.id}`, { method: 'DELETE' });
-            console.log('Development certificate slot released.');
-          } else {
-            console.log('Development certificate count is below the usual limit; no certificate revoked.');
+          for (const stale of ciGenerated) {
+            console.log('Revoking CI certificate ' + stale.id + ' (' + stale.attributes?.expirationDate + ')');
+            await request('/v1/certificates/' + stale.id, { method: 'DELETE' });
           }
+          console.log('CI development certificate slots cleaned.');
           JS
           node "$RUNNER_TEMP/free-dev-cert.mjs"
 
