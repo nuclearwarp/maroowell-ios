@@ -3,7 +3,7 @@ import SwiftUI
 struct MetaRealtimeView: View {
     @ObservedObject var store: MetaRealtimeStore
 
-    init(store: MetaRealtimeStore = MetaRealtimeStore()) {
+    init(store: MetaRealtimeStore) {
         self.store = store
     }
 
