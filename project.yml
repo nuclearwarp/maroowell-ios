@@ -8,6 +8,9 @@ packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift
     exactVersion: 2.55.1
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    exactVersion: 12.19.2
 
 targets:
   Maroowell:
@@ -29,6 +32,16 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: V5A6HB9WBY
         TARGETED_DEVICE_FAMILY: 1
+        CODE_SIGN_ENTITLEMENTS: Maroowell/Resources/Maroowell.entitlements
+      configs:
+        Debug:
+          APS_ENVIRONMENT: development
+        Release:
+          APS_ENVIRONMENT: production
     dependencies:
       - package: Supabase
         product: Supabase
+      - package: Firebase
+        product: FirebaseCore
+      - package: Firebase
+        product: FirebaseMessaging

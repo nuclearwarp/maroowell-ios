@@ -24,6 +24,12 @@
     <string>https://rgqerimdxkthkcewqbbe.supabase.co</string>
     <key>SUPABASE_PUBLISHABLE_KEY</key>
     <string>sb_publishable_FUFuH5JVyM-JLWWVeasgOw_Sk_LtD9H</string>
+    <key>FirebaseAppDelegateProxyEnabled</key>
+    <false/>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>remote-notification</string>
+    </array>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>

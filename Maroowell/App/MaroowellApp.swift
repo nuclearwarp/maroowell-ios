@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct MaroowellApp: App {
+    @UIApplicationDelegateAdaptor(MaroowellAppDelegate.self) private var appDelegate
     @StateObject private var sessionViewModel = SessionViewModel()
 
     var body: some Scene {
@@ -16,6 +17,7 @@ struct MaroowellApp: App {
 
 struct RootView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -36,6 +38,10 @@ struct RootView: View {
             } else {
                 LoginView()
             }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, sessionViewModel.session != nil else { return }
+            Task { await PushManager.shared.resyncCurrentDevice() }
         }
     }
 }

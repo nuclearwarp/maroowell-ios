@@ -30,6 +30,7 @@ final class SessionViewModel: ObservableObject {
         do {
             _ = try await client.auth.session
             session = try await makeValidatedSession()
+            await PushManager.shared.sessionBecameAvailable()
         } catch {
             session = nil
         }
@@ -60,6 +61,7 @@ final class SessionViewModel: ObservableObject {
             }
 
             session = validatedSession
+            await PushManager.shared.sessionBecameAvailable()
         } catch {
             if error is MaroowellAuthError {
                 try? await client.auth.signOut()
@@ -70,6 +72,7 @@ final class SessionViewModel: ObservableObject {
     }
 
     func signOut() async {
+        await PushManager.shared.unregisterCurrentDevice()
         try? await client.auth.signOut()
         session = nil
         errorMessage = nil
