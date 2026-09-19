@@ -2,19 +2,35 @@ import SwiftUI
 import UIKit
 
 struct MetaRealtimeShareView: View {
+    @StateObject private var store = MetaRealtimeStore()
     @State private var shareImage: UIImage?
     @State private var isSharing = false
+    @State private var isRendering = false
 
     var body: some View {
-        MetaRealtimeView()
+        MetaRealtimeView(store: store)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        captureAndShare()
+                    Menu {
+                        Button {
+                            renderAndShare(includeDrivers: false)
+                        } label: {
+                            Label("캠프 현황 이미지", systemImage: "photo")
+                        }
+
+                        Button {
+                            renderAndShare(includeDrivers: true)
+                        } label: {
+                            Label("기사 포함 이미지", systemImage: "person.3.fill")
+                        }
                     } label: {
-                        Label("현황 공유", systemImage: "square.and.arrow.up")
+                        if isRendering {
+                            ProgressView()
+                        } else {
+                            Label("현황 공유", systemImage: "square.and.arrow.up")
+                        }
                     }
-                    .accessibilityHint("현재 보이는 실시간 배송 현황을 이미지로 공유합니다.")
+                    .disabled(isRendering || store.filteredRows.isEmpty)
                 }
             }
             .sheet(isPresented: $isSharing, onDismiss: {
@@ -28,23 +44,17 @@ struct MetaRealtimeShareView: View {
     }
 
     @MainActor
-    private func captureAndShare() {
-        guard let window = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })
-        else { return }
+    private func renderAndShare(includeDrivers: Bool) {
+        guard !store.filteredRows.isEmpty else { return }
+        isRendering = true
+        defer { isRendering = false }
 
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = window.screen.scale
-        format.opaque = true
-        let renderer = UIGraphicsImageRenderer(bounds: window.bounds, format: format)
-        let image = renderer.image { context in
-            if !window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) {
-                window.layer.render(in: context.cgContext)
-            }
-        }
+        let report = MetaRealtimeReportView(store: store, includeDrivers: includeDrivers)
+        let renderer = ImageRenderer(content: report)
+        renderer.scale = 2.0
+        renderer.isOpaque = true
 
+        guard let image = renderer.uiImage else { return }
         shareImage = image
         isSharing = true
     }

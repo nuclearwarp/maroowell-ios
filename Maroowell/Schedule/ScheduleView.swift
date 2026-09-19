@@ -3,6 +3,7 @@ import SwiftUI
 struct ScheduleView: View {
     @StateObject private var model = ScheduleViewModel()
     @State private var showDiscardAlert = false
+    @State private var showMetaUpload = false
 
     var body: some View {
         ScrollView {
@@ -33,7 +34,14 @@ struct ScheduleView: View {
         .navigationTitle("입차 스케줄")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showMetaUpload = true
+                } label: {
+                    Label("META 전송", systemImage: "arrow.up.doc.fill")
+                }
+                .disabled(model.selectedCamp == nil || model.isLoading || model.isSaving)
+
                 Button {
                     Task { await model.save() }
                 } label: {
@@ -45,6 +53,15 @@ struct ScheduleView: View {
                     }
                 }
                 .disabled(!model.canSave)
+            }
+        }
+        .sheet(isPresented: $showMetaUpload) {
+            NavigationStack {
+                if let path = model.metaUploadPath {
+                    MaroowellWebView(title: "메타어드민 전송", path: path)
+                } else {
+                    ContentUnavailableView("캠프를 먼저 선택해주세요.", systemImage: "calendar.badge.exclamationmark")
+                }
             }
         }
         .alert("입차 스케줄", isPresented: Binding(

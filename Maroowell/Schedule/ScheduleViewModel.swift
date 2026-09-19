@@ -26,6 +26,14 @@ final class ScheduleViewModel: ObservableObject {
     var canSave: Bool { !dirtyKeys.isEmpty && !isLoading && !isSaving }
     var suggestions: [String] { driverAccounts.map(\.displayName) }
 
+    var metaUploadPath: String? {
+        guard let selectedCamp else { return nil }
+        let camp = selectedCamp.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? selectedCamp.name
+        let wave = selectedCamp.wave.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? selectedCamp.wave
+        let date = ScheduleDatePolicy.iso(selectedDate)
+        return "/maroowell_schedule?app_meta_upload=1&camp=\(camp)&wave=\(wave)&date=\(date)"
+    }
+
     func selectCamp(_ camp: ScheduleCampOption) async {
         guard !isLoading && !isSaving else { return }
         selectedCamp = camp

@@ -46,6 +46,30 @@ final class QuantityViewModel: ObservableObject {
     func deleteRoute(id: UUID) {
         guard routes.count > 1 else { return }
         routes.removeAll { $0.id == id }
+        persistSilently()
+    }
+
+    private func persistSilently() {
+        let normalized = routes.map { route -> QuantityRouteRecord in
+            var copy = route
+            copy.campName = route.campName.trimmingCharacters(in: .whitespacesAndNewlines)
+            copy.routeName = route.routeName.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            return copy
+        }
+        guard normalized.allSatisfy({ !$0.routeName.isEmpty }) else { return }
+        do {
+            try store.save(
+                QuantityRecord(
+                    memo: memo.trimmingCharacters(in: .whitespacesAndNewlines),
+                    savedAt: .now,
+                    routes: normalized
+                ),
+                for: selectedDate
+            )
+            routes = normalized
+        } catch {
+            saveMessage = "라우트 삭제 저장에 실패했습니다."
+        }
     }
 
     func applyRecentPrices(to routeID: UUID) {

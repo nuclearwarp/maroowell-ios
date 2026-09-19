@@ -111,9 +111,15 @@ struct HomeView: View {
         case .accountStats:
             NavigationLink { AccountStatsView(session: session) } label: { HomeMenuRow(item: item, badge: "팀장") }
                 .buttonStyle(.plain)
+        case .operations:
+            NavigationLink { OperationsBoardView(session: session) } label: { HomeMenuRow(item: item, badge: session.isSuperAdmin ? "관리" : nil) }
+                .buttonStyle(.plain)
+        case .notices:
+            NavigationLink { NoticeBoardView(session: session) } label: { HomeMenuRow(item: item, badge: nil) }
+                .buttonStyle(.plain)
         case .web(let path):
             NavigationLink {
-                MaroowellWebView(title: item.title, path: path)
+                NativeMenuRouterView(title: item.title, path: path, session: session)
             } label: {
                 HomeMenuRow(item: item, badge: AppAccessPolicy.permissionBadge(for: path, session: session))
             }
@@ -135,7 +141,7 @@ struct HomeView: View {
                     .font(MaroowellBrandFont.font(size: 17))
                     .tracking(1.35)
                     .foregroundStyle(Color(red: 1.0, green: 0.77, blue: 0.0))
-                Text("iOS v1.0")
+                Text("iOS v1.5.4")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(MaroowellTheme.muted)
                     .padding(.horizontal, 6)
@@ -308,6 +314,20 @@ struct HomeView: View {
             .init(tab: .work, title: "차량 점검 / 정비", subtitle: "내 차량 점검·정비 기록 관리", symbol: "wrench.and.screwdriver.fill", destination: .placeholder("차량 정비 기록 화면은 다음 네이티브 포팅 묶음에서 연결합니다."))
         ]
 
+        if session.isMaroowell {
+            items.insert(
+                .init(
+                    tab: .work,
+                    title: "운영 업무",
+                    subtitle: session.isSuperAdmin ? "공지 · 진행중 업무 · 최근 운영 이슈" : "회사 공지",
+                    symbol: "briefcase.fill",
+                    destination: .operations
+                ),
+                at: 0
+            )
+            items.append(.init(tab: .more, title: "공지사항", subtitle: "회사내 공지 조회", symbol: "megaphone.fill", destination: .notices))
+        }
+
         if session.canView(AppAccessPolicy.schedulePath) {
             items.append(.init(tab: .work, title: "입차 스케줄", subtitle: "전체 라우트 입차 일정 조회 및 관리", symbol: "calendar", destination: .schedule))
         }
@@ -412,6 +432,8 @@ private enum HomeMenuDestination {
     case campLookup
     case freshbagRatio
     case accountStats
+    case operations
+    case notices
     case web(String)
     case placeholder(String)
 }
@@ -501,6 +523,8 @@ private struct HomeMenuRow: View {
         case "용차": return "menu_dragon_car"
         case "용차 스케줄": return "menu_quantity"
         case "관리자 권한 관리": return "menu_admin"
+        case "운영 업무": return "menu_admin"
+        case "공지사항": return "menu_push"
         case "PUSH 알림": return "menu_push"
         default: return nil
         }

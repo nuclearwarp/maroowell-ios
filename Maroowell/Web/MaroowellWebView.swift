@@ -165,7 +165,55 @@ private struct MaroowellWKWebView: UIViewRepresentable {
               style.textContent = css;
             } catch (_) {}
           }
-          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tune); else tune();
+          function deepLink() {
+            try {
+              const path = (location.pathname.endsWith('/') ? location.pathname.slice(0, -1) : location.pathname) || '/';
+              const qs = new URLSearchParams(location.search);
+              if (path === '/maroowell_schedule' && qs.get('app_meta_upload') === '1' && !window.__mwScheduleMetaDeepLinked) {
+                const camp = qs.get('camp') || '';
+                const wave = qs.get('wave') || 'WAVE2';
+                const date = qs.get('date') || '';
+                const campInput = document.getElementById('campInput');
+                const waveInput = document.getElementById('waveSelect');
+                const manual = document.getElementById('weekManualInput');
+                const manualApply = document.getElementById('btnWeekManualApply');
+                const loadBtn = document.getElementById('btnLoad');
+                const metaBtn = document.getElementById('btnMetaUpload');
+                if (campInput && waveInput && manual && manualApply && loadBtn && metaBtn && date) {
+                  window.__mwScheduleMetaDeepLinked = true;
+                  const d = new Date(date + 'T12:00:00');
+                  const th = new Date(d);
+                  th.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+                  const week1 = new Date(th.getFullYear(), 0, 4);
+                  const week = 1 + Math.round(((th - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+                  campInput.value = camp;
+                  campInput.dispatchEvent(new Event('change', {bubbles:true}));
+                  setTimeout(function(){
+                    waveInput.value = wave;
+                    waveInput.dispatchEvent(new Event('change', {bubbles:true}));
+                    manual.value = th.getFullYear() + ' - ' + String(week).padStart(2,'0') + 'W';
+                    manualApply.click();
+                    setTimeout(function(){
+                      loadBtn.click();
+                      setTimeout(function(){
+                        metaBtn.click();
+                        setTimeout(function(){
+                          const opt = document.querySelector('#metaUploadDateList [data-date="' + CSS.escape(date) + '"]');
+                          if (opt) opt.click();
+                        }, 350);
+                      }, 900);
+                    }, 200);
+                  }, 120);
+                }
+              }
+            } catch (_) {}
+          }
+          function boot() {
+            tune();
+            deepLink();
+            setTimeout(deepLink, 700);
+          }
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
         })();
         """
         configuration.userContentController.addUserScript(
