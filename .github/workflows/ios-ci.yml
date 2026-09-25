@@ -22,7 +22,7 @@ jobs:
       - name: Install build tools
         run: brew install xcodegen apktool
 
-      - name: Prepare Android brand resources
+      - name: Prepare Android font resource and verify loading GIF
         run: |
           set -euo pipefail
           mkdir -p Maroowell/Resources
@@ -32,16 +32,14 @@ jobs:
             "https://maroowell-app-download.brain-0f6.workers.dev/downloads/Maroowell-1.4.8.apk" \
             -o "$APK"
           apktool d -f -s "$APK" -o "$DECODED"
-          GIF_PATH="$(find "$DECODED/res" -type f -name 'maroowell_login_loading4.*' -print -quit)"
           FONT_PATH="$(find "$DECODED/res" -type f -name 'mungyeong_gamhong.*' -print -quit)"
-          test -n "$GIF_PATH"
           test -n "$FONT_PATH"
-          cp "$GIF_PATH" Maroowell/Resources/maroowell_login_loading4.gif
           cp "$FONT_PATH" Maroowell/Resources/mungyeong_gamhong.ttf
-          file Maroowell/Resources/maroowell_login_loading4.gif
-          file Maroowell/Resources/mungyeong_gamhong.ttf
           test -s Maroowell/Resources/maroowell_login_loading4.gif
           test -s Maroowell/Resources/mungyeong_gamhong.ttf
+          echo "8FD33706F05F24ED5276FF4FA1E65F7C9B09E866F845F20163E1E017981B0B5F  Maroowell/Resources/maroowell_login_loading4.gif" | shasum -a 256 -c -
+          file Maroowell/Resources/maroowell_login_loading4.gif
+          file Maroowell/Resources/mungyeong_gamhong.ttf
 
       - name: Generate Xcode project
         run: xcodegen generate

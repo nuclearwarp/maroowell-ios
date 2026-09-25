@@ -1,8 +1,8 @@
 import CoreGraphics
 import CoreText
-import ImageIO
 import SwiftUI
 import UIKit
+import WebKit
 
 enum MaroowellBrandFont {
     private static let postScriptName: String? = {
@@ -34,54 +34,68 @@ struct MaroowellLoadingGIFView: UIViewRepresentable {
         self.resourceName = resourceName
     }
 
-    func makeUIView(context: Context) -> UIImageView {
-        let imageView = UIImageView()
-        imageView.contentMode = .scaleAspectFit
-        imageView.clipsToBounds = false
-        imageView.backgroundColor = .clear
-        imageView.image = Self.animatedGIF(named: resourceName)
-        imageView.startAnimating()
-        return imageView
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.suppressesIncrementalRendering = false
+
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isOpaque = true
+        webView.backgroundColor = .white
+        webView.scrollView.backgroundColor = .white
+        webView.scrollView.isScrollEnabled = false
+        webView.scrollView.bounces = false
+        webView.isUserInteractionEnabled = false
+
+        loadGIF(into: webView)
+        return webView
     }
 
-    func updateUIView(_ uiView: UIImageView, context: Context) {
-        if uiView.image == nil {
-            uiView.image = Self.animatedGIF(named: resourceName)
-        }
-        if !uiView.isAnimating {
-            uiView.startAnimating()
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        if webView.url == nil {
+            loadGIF(into: webView)
         }
     }
 
-    private static func animatedGIF(named name: String) -> UIImage? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "gif"),
-              let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-            return nil
+    private func loadGIF(into webView: WKWebView) {
+        guard let url = Bundle.main.url(forResource: resourceName, withExtension: "gif"),
+              let data = try? Data(contentsOf: url) else {
+            return
         }
 
-        let count = CGImageSourceGetCount(source)
-        guard count > 0 else { return nil }
-
-        var frames: [UIImage] = []
-        frames.reserveCapacity(count)
-        var duration: TimeInterval = 0
-
-        for index in 0..<count {
-            guard let cgImage = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
-            frames.append(UIImage(cgImage: cgImage))
-
-            var delay: TimeInterval = 0.1
-            if let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [String: Any],
-               let gif = properties[kCGImagePropertyGIFDictionary as String] as? [String: Any] {
-                let unclamped = gif[kCGImagePropertyGIFUnclampedDelayTime as String] as? Double
-                let clamped = gif[kCGImagePropertyGIFDelayTime as String] as? Double
-                delay = unclamped ?? clamped ?? 0.1
+        let base64 = data.base64EncodedString()
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+          <style>
+            html, body {
+              margin: 0;
+              padding: 0;
+              width: 100%;
+              height: 100%;
+              overflow: hidden;
+              background: #FFFFFF;
             }
-            duration += max(delay, 0.02)
-        }
-
-        guard !frames.isEmpty else { return nil }
-        if frames.count == 1 { return frames[0] }
-        return UIImage.animatedImage(with: frames, duration: max(duration, 0.1))
+            body {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            img {
+              display: block;
+              width: 100vw;
+              height: 100vh;
+              object-fit: contain;
+              object-position: center center;
+            }
+          </style>
+        </head>
+        <body>
+          <img src="data:image/gif;base64,\(base64)" alt="">
+        </body>
+        </html>
+        """
+        webView.loadHTMLString(html, baseURL: nil)
     }
 }
