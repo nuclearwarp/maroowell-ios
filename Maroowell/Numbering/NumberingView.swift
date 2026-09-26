@@ -153,7 +153,7 @@ struct NumberingView: View {
 
             fieldCard("오늘 입차 라우트") {
                 Picker("오늘 입차 라우트", selection: $selectedContext) {
-                    ForEach(Array(contexts.enumerated()), id: .offset) { index, item in
+                    ForEach(Array(contexts.enumerated()), id: \.offset) { index, item in
                         Text("\(item.camp) · \(item.route) · \(waveName(item.wave))")
                             .tag(index)
                     }
@@ -184,7 +184,7 @@ struct NumberingView: View {
 
             fieldCard("요청 모바일 캠프") {
                 Picker("요청 모바일 캠프", selection: $mobileCamp) {
-                    ForEach(currentMobileOptions(returnLabel: returnLabel), id: .self) { value in
+                    ForEach(currentMobileOptions(returnLabel: returnLabel), id: \.self) { value in
                         Text(value).tag(value)
                     }
                 }
@@ -217,7 +217,7 @@ struct NumberingView: View {
 
             fieldCard("정산월") {
                 Picker("정산월", selection: $selectedMonth) {
-                    ForEach(historyMonths, id: .self) { month in
+                    ForEach(historyMonths, id: \.self) { month in
                         Text(month).tag(month)
                     }
                 }
@@ -323,7 +323,7 @@ struct NumberingView: View {
 
         do {
             var loaded: [String: GoogleFormDefinition] = [:]
-            for group in Dictionary(grouping: contexts, by: .camp) {
+            for group in Dictionary(grouping: contexts, by: \.camp) {
                 guard let rawURL = group.value.first(where: { !$0.numberingURL.isEmpty })?.numberingURL else {
                     throw NumberingError.message("\(group.key) 캠프의 채번 URL이 없습니다.")
                 }
