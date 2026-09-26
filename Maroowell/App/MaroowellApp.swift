@@ -25,13 +25,15 @@ struct RootView: View {
                 .ignoresSafeArea()
 
             if sessionViewModel.isBootstrapping {
-                VStack(spacing: 18) {
-                    MaroowellMark(size: 86)
-                    ProgressView()
-                        .controlSize(.large)
-                    Text("마루웰을 준비하고 있어요")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                ZStack {
+                    Color.white
+                        .ignoresSafeArea()
+
+                    Image("MaroowellLoginLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 242, maxHeight: 218)
+                        .accessibilityLabel("마루웰")
                 }
             } else if let session = sessionViewModel.session {
                 HomeView(session: session)
