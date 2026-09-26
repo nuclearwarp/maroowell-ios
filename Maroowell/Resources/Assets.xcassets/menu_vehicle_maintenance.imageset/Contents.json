@@ -1,13 +1,1 @@
-{
-  "images": [
-    {
-      "filename": "menu_vehicle_maintenance.png",
-      "idiom": "universal",
-      "scale": "1x"
-    }
-  ],
-  "info": {
-    "author": "xcode",
-    "version": 1
-  }
-}
+{ "images": [ { "filename": "menu_vehicle_maintenance.png", "idiom": "universal", "scale": "1x" } ], "info": { "author": "xcode", "version": 1 } }

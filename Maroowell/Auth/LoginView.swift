@@ -7,7 +7,8 @@ struct LoginView: View {
     @State private var showPassword = false
     @State private var showPrivacyPolicy = false
     @AppStorage("maroowell.rememberEmail") private var rememberEmail = false
-    @AppStorage("maroowell.savedEmail") private var savedEmail = ""
+    @AppStorage("maroowell.rememberPassword") private var rememberPassword = false
+    private let credentialStore = SecureCredentialStore()
     @FocusState private var focusedField: Field?
 
     private enum Field { case email, password }
@@ -73,24 +74,24 @@ struct LoginView: View {
                         }
                     }
 
-                    Button {
-                        rememberEmail.toggle()
-                        if !rememberEmail {
-                            savedEmail = ""
+                    HStack(spacing: 18) {
+                        credentialToggle(title: "아이디 저장", isOn: rememberEmail) {
+                            rememberEmail.toggle()
+                            if !rememberEmail {
+                                rememberPassword = false
+                                credentialStore.clear()
+                            }
                         }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: rememberEmail ? "checkmark.square.fill" : "square")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(rememberEmail ? MaroowellTheme.deepYellow : MaroowellTheme.muted)
-                            Text("아이디 저장")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(MaroowellTheme.ink)
-                            Spacer()
+
+                        credentialToggle(title: "비밀번호 저장", isOn: rememberPassword) {
+                            rememberPassword.toggle()
+                            if rememberPassword {
+                                rememberEmail = true
+                            }
                         }
-                        .contentShape(Rectangle())
+
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
 
                     if let error = sessionViewModel.errorMessage {
                         Text(error)
@@ -154,8 +155,14 @@ struct LoginView: View {
         }
         .animation(.easeInOut(duration: 0.16), value: sessionViewModel.isSigningIn)
         .onAppear {
-            if rememberEmail, !savedEmail.isEmpty {
-                email = savedEmail
+            let saved = credentialStore.load()
+            rememberEmail = saved.rememberEmail
+            rememberPassword = saved.rememberPassword
+            if saved.rememberEmail {
+                email = saved.email
+            }
+            if saved.rememberPassword {
+                password = saved.password
             }
         }
         .sheet(isPresented: $showPrivacyPolicy) {
@@ -169,6 +176,21 @@ struct LoginView: View {
             }
             .preferredColorScheme(.light)
         }
+    }
+
+    private func credentialToggle(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: isOn ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(isOn ? MaroowellTheme.deepYellow : MaroowellTheme.muted)
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(MaroowellTheme.ink)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func outlinedField<Content: View>(
@@ -202,11 +224,12 @@ struct LoginView: View {
         Task {
             await sessionViewModel.signIn(email: normalizedEmail, password: password)
             guard sessionViewModel.session != nil else { return }
-            if rememberEmail {
-                savedEmail = normalizedEmail
-            } else {
-                savedEmail = ""
-            }
+            credentialStore.save(
+                email: normalizedEmail,
+                password: password,
+                rememberEmail: rememberEmail,
+                rememberPassword: rememberPassword
+            )
         }
     }
 }

@@ -90,6 +90,9 @@ struct HomeView: View {
         case .quantityStats:
             NavigationLink { QuantityStatsView(session: session) } label: { HomeMenuRow(item: item, badge: nil) }
                 .buttonStyle(.plain)
+        case .numbering:
+            NavigationLink { NumberingView(session: session) } label: { HomeMenuRow(item: item, badge: nil) }
+                .buttonStyle(.plain)
         case .inspection:
             NavigationLink { DailyInspectionView() } label: { HomeMenuRow(item: item, badge: nil) }
                 .buttonStyle(.plain)
@@ -141,7 +144,7 @@ struct HomeView: View {
                     .font(MaroowellBrandFont.font(size: 17))
                     .tracking(1.35)
                     .foregroundStyle(Color(red: 1.0, green: 0.77, blue: 0.0))
-                Text("iOS v1.5.4")
+                Text("v1.5.6")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(MaroowellTheme.muted)
                     .padding(.horizontal, 6)
@@ -307,29 +310,39 @@ struct HomeView: View {
     }
 
     private var allMenuItems: [HomeMenuItem] {
-        var items: [HomeMenuItem] = [
-            .init(tab: .work, title: "배송 수량 등록", subtitle: "라우트별 수량·단가와 일자별 예상소득", symbol: "shippingbox.fill", destination: .quantity),
-            .init(tab: .work, title: "배송 통계", subtitle: "월별·정산월 일별 매출과 수량 추이", symbol: "chart.line.uptrend.xyaxis", destination: .quantityStats),
-            .init(tab: .work, title: "운수종사자 일상점검", subtitle: inspectionStore.hasDay(Date()) ? "오늘 점검 완료 · 월간 PDF 지원" : "오늘 점검 미완료 · 바로 등록", symbol: inspectionStore.hasDay(Date()) ? "checkmark.shield.fill" : "shield.lefthalf.filled", destination: .inspection),
-            .init(tab: .work, title: "차량 점검 / 정비", subtitle: "내 차량 점검·정비 기록 관리", symbol: "wrench.and.screwdriver.fill", destination: .placeholder("차량 정비 기록 화면은 다음 네이티브 포팅 묶음에서 연결합니다."))
-        ]
+        var items: [HomeMenuItem] = []
 
         if session.isMaroowell {
-            items.insert(
-                .init(
-                    tab: .work,
-                    title: "운영 업무",
-                    subtitle: session.isSuperAdmin ? "공지 · 진행중 업무 · 최근 운영 이슈" : "회사 공지",
-                    symbol: "briefcase.fill",
-                    destination: .operations
-                ),
-                at: 0
-            )
-            items.append(.init(tab: .more, title: "공지사항", subtitle: "회사내 공지 조회", symbol: "megaphone.fill", destination: .notices))
+            items.append(.init(
+                tab: .work,
+                title: "운영 업무",
+                subtitle: session.isSuperAdmin ? "공지 · 진행중 업무 · 최근 운영 이슈" : "회사 공지",
+                symbol: "briefcase.fill",
+                destination: .operations
+            ))
         }
+
+        items.append(.init(tab: .work, title: "배송 수량 등록", subtitle: "라우트별 수량·단가와 일자별 예상소득", symbol: "shippingbox.fill", destination: .quantity))
+        items.append(.init(tab: .work, title: "배송 통계", subtitle: "월별·정산월 일별 매출과 수량 추이", symbol: "chart.line.uptrend.xyaxis", destination: .quantityStats))
 
         if session.canView(AppAccessPolicy.schedulePath) {
             items.append(.init(tab: .work, title: "입차 스케줄", subtitle: "전체 라우트 입차 일정 조회 및 관리", symbol: "calendar", destination: .schedule))
+        }
+        if session.isMaroowell {
+            items.append(.init(tab: .work, title: "채번", subtitle: "채번 요청 · 반품 송장 · 월별 이력", symbol: "doc.text.fill", destination: .numbering))
+        }
+
+        items.append(.init(
+            tab: .work,
+            title: "운수종사자 일상점검",
+            subtitle: inspectionStore.hasDay(Date()) ? "오늘 점검 완료 · 월간 PDF 지원" : "매일 차량 상태를 빠르게 점검",
+            symbol: inspectionStore.hasDay(Date()) ? "checkmark.shield.fill" : "shield.lefthalf.filled",
+            destination: .inspection
+        ))
+        items.append(.init(tab: .work, title: "차량 점검 / 정비", subtitle: "내 차량 점검·정비 기록 관리", symbol: "wrench.and.screwdriver.fill", destination: .placeholder("차량 정비 기록 화면은 다음 네이티브 포팅 묶음에서 연결합니다.")))
+
+        if session.isMaroowell {
+            items.append(.init(tab: .more, title: "공지사항", subtitle: "회사내 공지 조회", symbol: "megaphone.fill", destination: .notices))
         }
         if session.canView(AppAccessPolicy.metaRealtimePath) {
             items.append(.init(tab: .status, title: "실시간 배송 현황", subtitle: "META 라우트 스캔 · 오스캔 자동 확인", symbol: "dot.radiowaves.left.and.right", destination: .metaRealtime))
@@ -359,11 +372,9 @@ struct HomeView: View {
             (.more, "관리자 권한 관리", "사용자·관리자 권한 관리", "person.badge.key.fill", "/admin_access.html"),
             (.more, "PUSH 알림", "긴급 PUSH · 팀 공지 발송", "bell.badge.fill", "/maroowell_push")
         ]
-
         for (tab, title, subtitle, symbol, path) in webItems where session.canView(path) {
             items.append(.init(tab: tab, title: title, subtitle: subtitle, symbol: symbol, destination: .web(path)))
         }
-
         return items
     }
 
@@ -425,6 +436,7 @@ private enum HomeTab: String, CaseIterable, Identifiable {
 private enum HomeMenuDestination {
     case quantity
     case quantityStats
+    case numbering
     case inspection
     case schedule
     case metaRealtime
@@ -453,21 +465,22 @@ private struct HomeMenuRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(MaroowellTheme.yellow.opacity(0.18))
+            Group {
                 if let assetName = androidAssetName(for: item.title) {
                     Image(assetName)
                         .resizable()
                         .scaledToFit()
-                        .padding(8)
                 } else {
-                    Image(systemName: item.symbol)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(MaroowellTheme.deepYellow)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(MaroowellTheme.yellow.opacity(0.18))
+                        Image(systemName: item.symbol)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(MaroowellTheme.deepYellow)
+                    }
                 }
             }
-            .frame(width: 54, height: 54)
+            .frame(width: 56, height: 56)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 7) {
@@ -506,6 +519,7 @@ private struct HomeMenuRow: View {
         switch title {
         case "배송 수량 등록": return "menu_freshbag_status"
         case "배송 통계": return "menu_quantity_stats"
+        case "채번": return "menu_numbering"
         case "입차 스케줄": return "menu_schedule"
         case "실시간 배송 현황": return "menu_realtime"
         case "운수종사자 일상점검": return "menu_daily_inspection"

@@ -1,13 +1,1 @@
-{
-  "images": [
-    {
-      "filename": "menu_freshbag_status.png",
-      "idiom": "universal",
-      "scale": "1x"
-    }
-  ],
-  "info": {
-    "author": "xcode",
-    "version": 1
-  }
-}
+{ "images": [ { "filename": "menu_freshbag_status.png", "idiom": "universal", "scale": "1x" } ], "info": { "author": "xcode", "version": 1 } }
