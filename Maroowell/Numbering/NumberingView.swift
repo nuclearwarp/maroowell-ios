@@ -15,9 +15,7 @@ struct NumberingView: View {
     @State private var mobileCamp = ""
     @State private var selectedMonth = ""
     @State private var isLoading = false
-    @State private var errorMessage: String?
-    @State private var showConfirm = false
-    @State private var showSuccess = false
+    @State private var activeAlert: NumberingAlertState?
 
     private let client = SupabaseService.shared.client
 
@@ -53,26 +51,32 @@ struct NumberingView: View {
                 await loadContexts()
             }
         }
-        .alert("오류", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("확인", role: .cancel) { errorMessage = nil }
-        } message: {
-            Text(errorMessage ?? "")
-        }
-        .alert(mode == .returnLabel ? "반품 송장 출력 요청" : "채번 요청", isPresented: $showConfirm) {
-            Button("취소", role: .cancel) {}
-            Button("제출") {
-                Task { await submitCurrentRequest() }
+        .alert(item: $activeAlert) { alert in
+            switch alert {
+            case .error(let message):
+                return Alert(
+                    title: Text("오류"),
+                    message: Text(message),
+                    dismissButton: .cancel(Text("확인"))
+                )
+            case .confirm:
+                return Alert(
+                    title: Text(mode == .returnLabel ? "반품 송장 출력 요청" : "채번 요청"),
+                    message: Text(confirmMessage),
+                    primaryButton: .cancel(Text("취소")),
+                    secondaryButton: .default(Text("제출")) {
+                        Task { await submitCurrentRequest() }
+                    }
+                )
+            case .success:
+                return Alert(
+                    title: Text("요청 완료"),
+                    message: Text("요청을 제출하고 채번 이력에 저장했습니다."),
+                    dismissButton: .default(Text("확인")) {
+                        mode = .menu
+                    }
+                )
             }
-        } message: {
-            Text(confirmMessage)
-        }
-        .alert("요청 완료", isPresented: $showSuccess) {
-            Button("확인") { mode = .menu }
-        } message: {
-            Text("요청을 제출하고 채번 이력에 저장했습니다.")
         }
     }
 
@@ -200,7 +204,7 @@ struct NumberingView: View {
 
             Button("제출") {
                 guard validate(returnLabel: returnLabel) else { return }
-                showConfirm = true
+                activeAlert = .confirm
             }
             .font(.headline.weight(.black))
             .foregroundStyle(.white)
@@ -314,7 +318,7 @@ struct NumberingView: View {
 
     private func openRequest(returnLabel: Bool) async {
         guard !contexts.isEmpty else {
-            errorMessage = "오늘 등록된 입차 스케줄이 없습니다."
+            activeAlert = .error("오늘 등록된 입차 스케줄이 없습니다.")
             return
         }
 
@@ -334,7 +338,7 @@ struct NumberingView: View {
             selectedContext = 0
             syncSelectedContext(returnLabel: returnLabel)
         } catch {
-            errorMessage = error.localizedDescription
+            activeAlert = .error(error.localizedDescription)
         }
     }
 
@@ -350,7 +354,7 @@ struct NumberingView: View {
             let rows = try JSONDecoder().decode([NumberingContext].self, from: response.data)
             contexts = rows.filter { !$0.route.isEmpty && $0.route != "휴무자" }
         } catch {
-            errorMessage = "오늘 입차 스케줄 조회 실패: \(error.localizedDescription)"
+            activeAlert = .error("오늘 입차 스케줄 조회 실패: \(error.localizedDescription)")
         }
     }
 
@@ -369,7 +373,7 @@ struct NumberingView: View {
             selectedMonth = historyMonths.first ?? settlementMonth()
             mode = .history
         } catch {
-            errorMessage = "채번 이력 조회 실패: \(error.localizedDescription)"
+            activeAlert = .error("채번 이력 조회 실패: \(error.localizedDescription)")
         }
     }
 
@@ -399,20 +403,20 @@ struct NumberingView: View {
 
     private func validate(returnLabel: Bool) -> Bool {
         guard !driverID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            errorMessage = "기사 아이디를 입력하세요."
+            activeAlert = .error("기사 아이디를 입력하세요.")
             return false
         }
         guard !mobileCamp.isEmpty else {
-            errorMessage = "요청 모바일 캠프를 선택하세요."
+            activeAlert = .error("요청 모바일 캠프를 선택하세요.")
             return false
         }
         if !returnLabel {
             guard !extractWaybill(waybill).isEmpty else {
-                errorMessage = "운송장번호를 확인하세요."
+                activeAlert = .error("운송장번호를 확인하세요.")
                 return false
             }
             guard let count = Int(quantity), count > 0 else {
-                errorMessage = "채번 수량을 입력하세요."
+                activeAlert = .error("채번 수량을 입력하세요.")
                 return false
             }
         }
@@ -456,9 +460,9 @@ struct NumberingView: View {
                 mobileCamp: mobileCamp
             )
             try await client.from("numbering_requests").insert(payload).execute()
-            showSuccess = true
+            activeAlert = .success
         } catch {
-            errorMessage = "제출 실패: \(error.localizedDescription)"
+            activeAlert = .error("제출 실패: \(error.localizedDescription)")
         }
     }
 
@@ -767,6 +771,23 @@ struct NumberingView: View {
 
     private func urlEncode(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+    }
+}
+
+private enum NumberingAlertState: Identifiable {
+    case error(String)
+    case confirm
+    case success
+
+    var id: String {
+        switch self {
+        case .error(let message):
+            return "error:\(message)"
+        case .confirm:
+            return "confirm"
+        case .success:
+            return "success"
+        }
     }
 }
 
