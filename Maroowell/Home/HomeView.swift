@@ -6,6 +6,8 @@ struct HomeView: View {
     @ObservedObject private var inspectionStore = InspectionStore.shared
     @StateObject private var homeScheduleStore = HomeScheduleStore()
     @State private var selectedTab: HomeTab = .home
+    @State private var showInspectionReminder = false
+    @State private var openTodayInspection = false
 
     let session: AppSession
 
@@ -26,6 +28,28 @@ struct HomeView: View {
             }
             .background(MaroowellTheme.background.ignoresSafeArea())
             .navigationBarHidden(true)
+            .navigationDestination(isPresented: $openTodayInspection) {
+                DailyInspectionView()
+            }
+            .alert("오늘 일상점검이 필요합니다", isPresented: $showInspectionReminder) {
+                Button("확인") {
+                    openTodayInspection = true
+                }
+            } message: {
+                Text("오늘 출근 스케줄이 등록되어 있지만 일상점검이 완료되지 않았습니다. 오늘 일상점검을 먼저 완료해주세요.")
+            }
+            .onChange(of: homeScheduleStore.entriesByDate) { _, _ in
+                evaluateTodayInspectionReminder()
+            }
+            .onChange(of: inspectionStore.revision) { _, _ in
+                evaluateTodayInspectionReminder()
+            }
+            .onChange(of: openTodayInspection) { _, isOpen in
+                if !isOpen { evaluateTodayInspectionReminder() }
+            }
+            .onAppear {
+                evaluateTodayInspectionReminder()
+            }
         }
     }
 
@@ -312,6 +336,15 @@ struct HomeView: View {
         })
     }
 
+    private func evaluateTodayInspectionReminder() {
+        let hasWorkToday = homeScheduleStore.entries(for: .now).contains { !$0.isOff }
+        if hasWorkToday && !inspectionStore.hasDay(.now) && !openTodayInspection {
+            showInspectionReminder = true
+        } else {
+            showInspectionReminder = false
+        }
+    }
+
     private func items(for tab: HomeTab) -> [HomeMenuItem] {
         allMenuItems.filter { $0.tab == tab }
     }
@@ -319,11 +352,11 @@ struct HomeView: View {
     private var allMenuItems: [HomeMenuItem] {
         var items: [HomeMenuItem] = []
 
-        if session.isMaroowell {
+        if session.isSuperAdmin {
             items.append(.init(
                 tab: .work,
                 title: "운영 업무",
-                subtitle: session.isSuperAdmin ? "공지 · 진행중 업무 · 최근 운영 이슈" : "회사 공지",
+                subtitle: "공지 · 진행중 업무 · 최근 운영 이슈",
                 symbol: "briefcase.fill",
                 destination: .operations
             ))
