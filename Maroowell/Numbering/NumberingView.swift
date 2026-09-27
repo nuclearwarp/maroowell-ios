@@ -428,7 +428,7 @@ struct NumberingView: View {
         do {
             var values: [String: String] = [:]
             if let entry = form.branchEntry {
-                values[entry] = returnLabel ? "반품 송장 출력 요청" : "채번 요청"
+                values[entry] = returnLabel ? form.branchReturnValue : form.branchNumberingValue
             }
             if returnLabel {
                 if let entry = form.returnIDEntry { values[entry] = driverID }
@@ -443,7 +443,7 @@ struct NumberingView: View {
                 throw NumberingError.message("Google Form 질문 항목을 확인하지 못했습니다.")
             }
 
-            try await postGoogleForm(responseURL: form.responseURL, values: values)
+            try await postGoogleForm(responseURL: form.responseURL, values: values, returnLabel: returnLabel)
 
             let payload = NumberingInsertRow(
                 maroowellInfoID: ctx.infoID,
@@ -528,10 +528,19 @@ struct NumberingView: View {
                     return value.contains("반품송장") || value.contains("반품출력")
                 }
         }
+        let branchNumberingValue = branch?.options.first {
+            key($0).contains("채번요청")
+        } ?? "채번 요청"
+        let branchReturnValue = branch?.options.first {
+            let value = key($0)
+            return value.contains("반품송장") || value.contains("반품출력")
+        } ?? "반품 송장 출력"
 
         return GoogleFormDefinition(
             responseURL: formResponseURL(viewURL),
             branchEntry: branch?.entryID,
+            branchNumberingValue: branchNumberingValue,
+            branchReturnValue: branchReturnValue,
             waybillEntry: waybill?.entryID,
             driverIDEntry: ids.first?.entryID,
             quantityEntry: quantityQuestion?.entryID,
@@ -575,28 +584,55 @@ struct NumberingView: View {
         }
     }
 
-    private func postGoogleForm(responseURL: String, values: [String: String]) async throws {
+    private func postGoogleForm(
+        responseURL: String,
+        values: [String: String],
+        returnLabel: Bool
+    ) async throws {
         guard let url = URL(string: responseURL) else {
             throw NumberingError.message("Google Form 제출 주소가 올바르지 않습니다.")
         }
 
-        var fields = ["fvv": "1", "pageHistory": "0,1"]
-        values.forEach { fields["entry.\($0.key)"] = $0.value }
+        let histories = returnLabel ? ["0,2", "0,1", "0"] : ["0,1", "0,2", "0"]
+        var lastStatus = -1
+        var lastBody = ""
 
-        let payload = fields
-            .map { "\(urlEncode($0.key))=\(urlEncode($0.value))" }
-            .joined(separator: "&")
+        for pageHistory in histories {
+            var fields = ["fvv": "1", "pageHistory": pageHistory]
+            values.forEach { fields["entry.\($0.key)"] = $0.value }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 20
-        request.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
-        request.httpBody = payload.data(using: .utf8)
+            let payload = fields
+                .map { "\(urlEncode($0.key))=\(urlEncode($0.value))" }
+                .joined(separator: "&")
 
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, 200..<400 ~= http.statusCode else {
-            throw NumberingError.message("Google Form 제출 실패")
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 20
+            request.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
+            request.setValue("Mozilla/5.0 MaroowellIOS", forHTTPHeaderField: "User-Agent")
+            request.httpBody = payload.data(using: .utf8)
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            if 200..<400 ~= status {
+                return
+            }
+
+            lastStatus = status
+            lastBody = String(data: data, encoding: .utf8) ?? ""
+            if status != 400 {
+                throw NumberingError.message("Google Form 제출 실패 (\(status))")
+            }
         }
+
+        let detail = lastBody
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .prefix(160)
+        throw NumberingError.message(
+            detail.isEmpty
+                ? "Google Form 제출 실패 (\(lastStatus))"
+                : "Google Form 제출 실패 (\(lastStatus)): \(detail)"
+        )
     }
 
     private func normalizeFormURL(_ value: String) -> String {
@@ -831,6 +867,8 @@ private struct FormQuestion {
 private struct GoogleFormDefinition {
     let responseURL: String
     let branchEntry: String?
+    let branchNumberingValue: String
+    let branchReturnValue: String
     let waybillEntry: String?
     let driverIDEntry: String?
     let quantityEntry: String?
