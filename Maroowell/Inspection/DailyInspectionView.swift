@@ -27,8 +27,8 @@ struct DailyInspectionView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     monthCard(proxy: proxy)
-                    profileCard
                     checklistCard
+                    profileCard
                     exportCard
                 }
                 .padding(16)
@@ -72,60 +72,29 @@ struct DailyInspectionView: View {
     }
 
     private func monthCard(proxy: ScrollViewProxy) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 7) {
             HStack {
-                monthButton("chevron.left") { changeMonth(-1) }
+                monthButton("chevron.left") { changeDay(-1) }
                 Spacer()
-                Text(monthTitle)
-                    .font(.title3.weight(.black))
-                    .foregroundStyle(MaroowellTheme.ink)
-                Spacer()
-                monthButton("chevron.right") { changeMonth(1) }
-            }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(1...store.daysInMonth(month), id: \.self) { day in
-                        let date = store.date(inMonth: month, day: day)
-                        let selected = day == selectedDay
-                        let saved = savedMonth[day] != nil
-                        Button {
-                            selectedDay = day
-                            loadSelectedDay()
-                        } label: {
-                            VStack(spacing: 3) {
-                                Text("\(day)")
-                                    .font(.subheadline.weight(.black))
-                                Text(store.weekdayLabel(for: date))
-                                    .font(.caption2.weight(.bold))
-                                if saved {
-                                    Circle().fill(selected ? Color.white : MaroowellTheme.deepYellow).frame(width: 5, height: 5)
-                                } else {
-                                    Color.clear.frame(width: 5, height: 5)
-                                }
-                            }
-                            .foregroundStyle(dayForeground(date: date, selected: selected))
-                            .frame(width: 50, height: 58)
-                            .background(selected ? MaroowellTheme.yellow : Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(selected ? MaroowellTheme.yellow : Color.black.opacity(0.10), lineWidth: 1)
-                            }
-                        }
-                        .id(day)
-                    }
+                VStack(spacing: 2) {
+                    Text(monthTitle)
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(MaroowellTheme.ink)
+                    Text("\(selectedDay)일 · \(store.weekdayLabel(for: selectedDate))")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(MaroowellTheme.muted)
                 }
-            }
-            .onChange(of: selectedDay) { _, newValue in
-                withAnimation { proxy.scrollTo(newValue, anchor: .center) }
+                Spacer()
+                monthButton("chevron.right") { changeDay(1) }
             }
 
             Text(summaryText)
-                .font(.caption.weight(.semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(isFuture ? .red : MaroowellTheme.muted)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
-        .padding(16)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .inspectionCard()
     }
 
@@ -196,23 +165,31 @@ struct DailyInspectionView: View {
 
             ForEach(Array(InspectionSchema.groups.enumerated()), id: \.offset) { groupIndex, group in
                 Text(group.title)
-                    .font(.headline.weight(.black))
-                    .foregroundStyle(.red)
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(Color.gray)
                     .padding(.top, 4)
 
                 ForEach(Array(group.items.enumerated()), id: \.offset) { itemIndex, item in
                     let globalIndex = InspectionSchema.globalIndex(groupIndex: groupIndex, itemIndex: itemIndex)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("\(globalIndex + 1). \(item)")
+                    HStack(spacing: 8) {
+                        Text("\(globalIndex + 1)")
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(Color.gray)
+                            .frame(width: 30, height: 30)
+                            .background(Color.gray.opacity(0.10), in: Circle())
+
+                        Text(item)
                             .font(.subheadline)
                             .foregroundStyle(MaroowellTheme.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                        HStack(spacing: 8) {
+                        HStack(spacing: 5) {
                             statusButton("O", index: globalIndex)
                             statusButton("X", index: globalIndex)
                         }
+                        .frame(width: 104)
                     }
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 5)
                     Divider()
                 }
             }
@@ -221,7 +198,7 @@ struct DailyInspectionView: View {
                 guard !isFuture else { return }
                 statuses = Array(repeating: "O", count: InspectionSchema.items.count)
             } label: {
-                Label("전체 양호", systemImage: "checkmark.circle.fill")
+                Label("전체 정상", systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.bold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
@@ -237,7 +214,7 @@ struct DailyInspectionView: View {
                 .overlay { RoundedRectangle(cornerRadius: 14).stroke(Color.black.opacity(0.10), lineWidth: 1) }
                 .disabled(isFuture)
 
-            Button("현재 화면 초기화") {
+            Button("선택 초기화") {
                 statuses = Array(repeating: "", count: InspectionSchema.items.count)
                 actionNote = ""
             }
@@ -250,7 +227,7 @@ struct DailyInspectionView: View {
             Button {
                 saveCurrentDay()
             } label: {
-                Text(isFuture ? "미래 일자는 점검할 수 없습니다" : "이 날짜 일상점검 저장")
+                Text(isFuture ? "미래 일자는 점검할 수 없습니다" : "일상점검 저장")
                     .font(.headline.weight(.bold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
@@ -261,7 +238,7 @@ struct DailyInspectionView: View {
 
             if savedMonth[selectedDay] != nil {
                 Button(role: .destructive) { showDeleteConfirm = true } label: {
-                    Text("이 날짜 일상점검 삭제")
+                    Text("삭제하기")
                         .font(.subheadline.weight(.bold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
@@ -382,15 +359,13 @@ struct DailyInspectionView: View {
         }
     }
 
-    private func changeMonth(_ delta: Int) {
+    private func changeDay(_ delta: Int) {
         store.saveProfile(profile)
-        month = store.startOfMonth(store.movingMonth(month, by: delta))
-        let today = Date()
-        if store.monthKey(for: month) == store.monthKey(for: today) {
-            selectedDay = store.dayNumber(for: today)
-        } else {
-            selectedDay = 1
-        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+        guard let moved = calendar.date(byAdding: .day, value: delta, to: selectedDate) else { return }
+        month = store.startOfMonth(moved)
+        selectedDay = store.dayNumber(for: moved)
         loadSelectedDay()
     }
 

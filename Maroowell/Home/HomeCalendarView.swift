@@ -1,4 +1,6 @@
+import CoreImage.CIFilterBuiltins
 import SwiftUI
+import UIKit
 
 struct HomeCalendarView: View {
     @ObservedObject var scheduleStore: HomeScheduleStore
@@ -297,6 +299,8 @@ private struct HomeCalendarDaySheet: View {
 
     @State private var showMemoEditor = false
     @State private var memoDraft = ""
+    @State private var qrCampInfo: HomeCampQuickInfo?
+    @State private var quickActionMessage: String?
 
     private var activeEntries: [HomePersonalScheduleEntry] { entries.filter { !$0.isOff } }
     private var inspectionDone: Bool { inspectionStore.hasDay(date) }
@@ -343,14 +347,15 @@ private struct HomeCalendarDaySheet: View {
                             .foregroundStyle(MaroowellTheme.ink)
 
                         if activeEntries.isEmpty {
-                            scheduleCard(title: "휴무", routes: ["등록된 입차 노선 없음"], night: false, off: true)
+                            scheduleCard(title: "휴무", routes: ["등록된 입차 노선 없음"], night: false, off: true, camp: "")
                         } else {
                             ForEach(activeEntries) { entry in
                                 scheduleCard(
                                     title: [entry.camp, entry.waveLabel].filter { !$0.isEmpty }.joined(separator: " · "),
                                     routes: groupRoutes(entry.routes),
                                     night: entry.wave == "WAVE1",
-                                    off: false
+                                    off: false,
+                                    camp: entry.camp
                                 )
                             }
                         }
@@ -461,6 +466,45 @@ private struct HomeCalendarDaySheet: View {
                 }
                 .presentationDetents([.medium, .large])
             }
+            .sheet(item: $qrCampInfo) { info in
+                NavigationStack {
+                    VStack(spacing: 14) {
+                        if let image = qrImage(info.code) {
+                            Image(uiImage: image)
+                                .interpolation(.none)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: 280, maxHeight: 280)
+                        } else {
+                            ContentUnavailableView("QR 생성 실패", systemImage: "qrcode")
+                        }
+
+                        Text(info.camp)
+                            .font(.headline.weight(.black))
+                        Text([info.code, info.address].filter { !$0.isEmpty }.joined(separator: "\n"))
+                            .font(.caption)
+                            .foregroundStyle(MaroowellTheme.muted)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(24)
+                    .navigationTitle("입차 QR")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("닫기") { qrCampInfo = nil }
+                        }
+                    }
+                }
+                .presentationDetents([.medium])
+            }
+            .alert("캠프 바로가기", isPresented: Binding(
+                get: { quickActionMessage != nil },
+                set: { if !$0 { quickActionMessage = nil } }
+            )) {
+                Button("확인", role: .cancel) { quickActionMessage = nil }
+            } message: {
+                Text(quickActionMessage ?? "")
+            }
         }
     }
 
@@ -480,7 +524,7 @@ private struct HomeCalendarDaySheet: View {
         return MaroowellTheme.muted
     }
 
-    private func scheduleCard(title: String, routes: [String], night: Bool, off: Bool) -> some View {
+    private func scheduleCard(title: String, routes: [String], night: Bool, off: Bool, camp: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.isEmpty ? "입차" : title)
                 .font(.caption.weight(.black))
@@ -489,6 +533,37 @@ private struct HomeCalendarDaySheet: View {
                 Text(route)
                     .font(.headline.weight(.black))
                     .foregroundStyle(MaroowellTheme.ink)
+            }
+
+            if !off && !camp.isEmpty {
+                HStack(spacing: 8) {
+                    Button {
+                        Task { await showCampQR(camp) }
+                    } label: {
+                        Text("입차 QR")
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(Color(red: 0.48, green: 0.29, blue: 0.0))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(Color(red: 1.0, green: 0.95, blue: 0.75), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay { RoundedRectangle(cornerRadius: 12).stroke(Color(red: 0.95, green: 0.79, blue: 0.30)) }
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        Task { await openKakaoNavigation(camp) }
+                    } label: {
+                        Text("카카오맵 네비 연결")
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(Color(red: 0.10, green: 0.10, blue: 0.10))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(Color(red: 0.996, green: 0.898, blue: 0.0), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay { RoundedRectangle(cornerRadius: 12).stroke(Color(red: 0.89, green: 0.80, blue: 0.0)) }
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 4)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -501,6 +576,68 @@ private struct HomeCalendarDaySheet: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.black.opacity(0.08), lineWidth: 1)
         }
+    }
+
+    private func showCampQR(_ camp: String) async {
+        do {
+            let info = try await HomeCampQuickInfo.load(for: camp)
+            guard !info.code.isEmpty else {
+                quickActionMessage = "QR을 만들 캠프 코드가 없습니다."
+                return
+            }
+            qrCampInfo = info
+        } catch {
+            quickActionMessage = error.localizedDescription
+        }
+    }
+
+    private func openKakaoNavigation(_ camp: String) async {
+        do {
+            let info = try await HomeCampQuickInfo.load(for: camp)
+            let appURL: URL?
+            if let latitude = info.latitude, let longitude = info.longitude {
+                appURL = URL(string: "kakaomap://route?ep=\(latitude),\(longitude)&by=car")
+            } else if !info.address.isEmpty {
+                let query = info.address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? info.address
+                appURL = URL(string: "kakaomap://search?q=\(query)")
+            } else {
+                appURL = nil
+            }
+
+            guard let appURL else {
+                quickActionMessage = "캠프 주소/좌표가 없습니다."
+                return
+            }
+
+            let opened = await openExternalURL(appURL)
+            if !opened {
+                if let storeURL = URL(string: "itms-apps://itunes.apple.com/app/id304608425") {
+                    _ = await openExternalURL(storeURL)
+                }
+                quickActionMessage = "카카오맵 앱이 필요합니다."
+            }
+        } catch {
+            quickActionMessage = error.localizedDescription
+        }
+    }
+
+    private func openExternalURL(_ url: URL) async -> Bool {
+        await withCheckedContinuation { continuation in
+            UIApplication.shared.open(url, options: [:]) { success in
+                continuation.resume(returning: success)
+            }
+        }
+    }
+
+    private func qrImage(_ value: String) -> UIImage? {
+        guard let data = value.data(using: .utf8) else { return nil }
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = data
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 12, y: 12)) else { return nil }
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(output, from: output.extent) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 
     private func groupRoutes(_ routes: [String]) -> [String] {
@@ -538,6 +675,90 @@ private struct HomeCalendarDaySheet: View {
         let parent = String(route.dropLast(2))
         guard let last = parent.last, last.isLetter else { return nil }
         return (parent, suffix)
+    }
+}
+
+private struct HomeCampQuickInfo: Decodable, Identifiable {
+    let id: Int64?
+    let camp: String
+    let mbCamp: String?
+    let parentCampID: Int64?
+    let address: String
+    let code: String
+    let latitude: Double?
+    let longitude: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case id, camp, address, code, latitude, longitude
+        case mbCamp = "mb_camp"
+        case parentCampID = "parent_camp_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(Int64.self, forKey: .id)
+        camp = try container.decodeIfPresent(String.self, forKey: .camp) ?? ""
+        mbCamp = try container.decodeIfPresent(String.self, forKey: .mbCamp)
+        parentCampID = try container.decodeIfPresent(Int64.self, forKey: .parentCampID)
+        address = try container.decodeIfPresent(String.self, forKey: .address) ?? ""
+        code = try container.decodeIfPresent(String.self, forKey: .code) ?? ""
+        latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
+    }
+
+    static func load(for rawCamp: String) async throws -> HomeCampQuickInfo {
+        let lookupCamp = rawCamp.replacingOccurrences(
+            of: #"^\s*용차\s*[·\-:]?\s*"#,
+            with: "",
+            options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        let wanted = normalize(lookupCamp)
+        guard !wanted.isEmpty else {
+            throw NSError(domain: "CampQuick", code: -1, userInfo: [NSLocalizedDescriptionKey: "캠프 정보가 없습니다."])
+        }
+
+        let auth = try await SupabaseService.shared.client.auth.session
+        var components = URLComponents(
+            url: AppConfig.supabaseURL.appendingPathComponent("rest/v1/camps"),
+            resolvingAgainstBaseURL: false
+        )!
+        components.queryItems = [
+            .init(name: "select", value: "id,camp,mb_camp,parent_camp_id,address,code,latitude,longitude"),
+            .init(name: "limit", value: "1000")
+        ]
+        var request = URLRequest(url: components.url!)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(AppConfig.supabasePublishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(status) else {
+            throw NSError(domain: "CampQuick", code: status, userInfo: [NSLocalizedDescriptionKey: "캠프 조회 실패 (\(status))"])
+        }
+
+        let rows = try JSONDecoder().decode([HomeCampQuickInfo].self, from: data)
+        guard let match = rows.first(where: { normalize($0.camp) == wanted }) else {
+            throw NSError(domain: "CampQuick", code: -2, userInfo: [NSLocalizedDescriptionKey: "camps에서 \(lookupCamp) 캠프를 찾지 못했습니다."])
+        }
+
+        if let parentID = match.parentCampID,
+           let parent = rows.first(where: { $0.id == parentID }),
+           !parent.code.isEmpty || !parent.address.isEmpty {
+            return parent
+        }
+
+        if let base = rows.first(where: {
+            normalize($0.camp) == wanted &&
+            (($0.mbCamp ?? "").isEmpty || $0.mbCamp == "본캠프" || normalize($0.mbCamp ?? "") == wanted) &&
+            (!$0.code.isEmpty || !$0.address.isEmpty)
+        }) {
+            return base
+        }
+        return match
+    }
+
+    private static func normalize(_ value: String) -> String {
+        value.uppercased().filter { $0.isNumber || $0.isLetter }
     }
 }
 

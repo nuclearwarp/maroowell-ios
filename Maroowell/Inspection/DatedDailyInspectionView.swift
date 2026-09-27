@@ -23,8 +23,8 @@ struct DatedDailyInspectionView: View {
         ScrollView {
             VStack(spacing: 14) {
                 dateCard
-                profileCard
                 checklistCard
+                profileCard
             }
             .padding(16)
             .padding(.bottom, 28)
@@ -123,7 +123,7 @@ struct DatedDailyInspectionView: View {
                         .foregroundStyle(MaroowellTheme.muted)
                 }
                 Spacer()
-                Button("전체 양호") {
+                Button("전체 정상") {
                     guard !isFuture else { return }
                     statuses = Array(repeating: "O", count: InspectionSchema.items.count)
                 }
@@ -133,20 +133,29 @@ struct DatedDailyInspectionView: View {
 
             ForEach(Array(InspectionSchema.groups.enumerated()), id: \.offset) { groupIndex, group in
                 Text(group.title)
-                    .font(.subheadline.weight(.black))
-                    .foregroundStyle(.red)
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(Color.gray)
                     .padding(.top, 4)
 
                 ForEach(Array(group.items.enumerated()), id: \.offset) { itemIndex, item in
                     let index = InspectionSchema.globalIndex(groupIndex: groupIndex, itemIndex: itemIndex)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("\(index + 1). \(item)")
+                    HStack(spacing: 8) {
+                        Text("\(index + 1)")
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(Color.gray)
+                            .frame(width: 30, height: 30)
+                            .background(Color.gray.opacity(0.10), in: Circle())
+
+                        Text(item)
                             .font(.subheadline)
                             .foregroundStyle(MaroowellTheme.ink)
-                        HStack(spacing: 8) {
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        HStack(spacing: 5) {
                             statusButton("O", index: index, color: .green)
                             statusButton("X", index: index, color: .red)
                         }
+                        .frame(width: 104)
                     }
                     .padding(.vertical, 5)
                     Divider()
@@ -159,6 +168,16 @@ struct DatedDailyInspectionView: View {
                 .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
                 .overlay { RoundedRectangle(cornerRadius: 12).stroke(MaroowellTheme.border, lineWidth: 1) }
                 .disabled(isFuture)
+
+            Button("선택 초기화") {
+                statuses = Array(repeating: "", count: InspectionSchema.items.count)
+                actionNote = ""
+            }
+            .font(.subheadline.weight(.bold))
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .buttonStyle(.bordered)
+            .disabled(isFuture)
 
             Button {
                 saveRecord()
@@ -176,7 +195,7 @@ struct DatedDailyInspectionView: View {
                 Button(role: .destructive) {
                     showDeleteConfirm = true
                 } label: {
-                    Text("이 날짜 일상점검 삭제")
+                    Text("삭제하기")
                         .font(.subheadline.weight(.bold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
