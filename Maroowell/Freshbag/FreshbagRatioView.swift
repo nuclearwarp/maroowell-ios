@@ -3,11 +3,19 @@ import SwiftUI
 import UIKit
 
 struct FreshbagRatioView: View {
-    @StateObject private var store = FreshbagRatioStore()
+    @StateObject private var store: FreshbagRatioStore
     @State private var shareImage: UIImage?
     @State private var isSharing = false
 
     let session: AppSession
+
+    init(session: AppSession) {
+        self.session = session
+        _store = StateObject(wrappedValue: FreshbagRatioStore(
+            campCode: session.campCode,
+            wave: session.wave
+        ))
+    }
 
     var body: some View {
         Group {
