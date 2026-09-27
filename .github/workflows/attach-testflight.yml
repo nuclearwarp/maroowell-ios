@@ -27,6 +27,9 @@ jobs:
       BETA_GROUP_NAME: "Maroowell Test"
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Normalize App Store Connect key
         shell: bash
         run: |
@@ -58,11 +61,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            TESTFLIGHT_BUILD_NUMBER="21"
-          else
-            TESTFLIGHT_BUILD_NUMBER="$WORKFLOW_RUN_NUMBER"
+          TESTFLIGHT_BUILD_NUMBER="$(awk '/CURRENT_PROJECT_VERSION:/ {print $2; exit}' project.yml)"
+          if [ -z "$TESTFLIGHT_BUILD_NUMBER" ]; then
+            echo "Could not read CURRENT_PROJECT_VERSION from project.yml" >&2
+            exit 1
           fi
+          echo "Attaching TestFlight build $TESTFLIGHT_BUILD_NUMBER"
           export TESTFLIGHT_BUILD_NUMBER
           export APPSTORE_PRIVATE_KEY_FILE="$RUNNER_TEMP/AuthKey.p8"
 
