@@ -507,16 +507,35 @@ private struct HomeMenuRow: View {
         HStack(spacing: 14) {
             Group {
                 if let assetName = androidAssetName(for: item.title) {
-                    Image(assetName)
-                        .resizable()
-                        .scaledToFit()
+                    if isRangkongArtwork(assetName) {
+                        Image(assetName)
+                            .resizable()
+                            .scaledToFit()
+                    } else {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                .fill(Color(red: 1.0, green: 196.0 / 255.0, blue: 0))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                        .stroke(Color(red: 21.0 / 255.0, green: 21.0 / 255.0, blue: 21.0 / 255.0), lineWidth: 2)
+                                }
+                            Image(assetName)
+                                .resizable()
+                                .scaledToFit()
+                                .padding(3)
+                        }
+                    }
                 } else {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(MaroowellTheme.yellow.opacity(0.18))
+                        RoundedRectangle(cornerRadius: 17, style: .continuous)
+                            .fill(Color(red: 1.0, green: 196.0 / 255.0, blue: 0))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                    .stroke(Color(red: 21.0 / 255.0, green: 21.0 / 255.0, blue: 21.0 / 255.0), lineWidth: 2)
+                            }
                         Image(systemName: item.symbol)
                             .font(.system(size: 22, weight: .bold))
-                            .foregroundStyle(MaroowellTheme.deepYellow)
+                            .foregroundStyle(Color(red: 21.0 / 255.0, green: 21.0 / 255.0, blue: 21.0 / 255.0))
                     }
                 }
             }
@@ -553,6 +572,10 @@ private struct HomeMenuRow: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(MaroowellTheme.border.opacity(0.8), lineWidth: 1)
         }
+    }
+
+    private func isRangkongArtwork(_ assetName: String) -> Bool {
+        assetName == "menu_numbering" || assetName == "menu_quantity_stats"
     }
 
     private func androidAssetName(for title: String) -> String? {
