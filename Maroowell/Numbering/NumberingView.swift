@@ -202,15 +202,26 @@ struct NumberingView: View {
                     .padding(.horizontal, 3)
             }
 
-            Button("제출") {
+            Button {
+                guard !isLoading else { return }
                 guard validate(returnLabel: returnLabel) else { return }
                 activeAlert = .confirm
+            } label: {
+                HStack(spacing: 8) {
+                    if isLoading {
+                        ProgressView().tint(.white)
+                    }
+                    Text(isLoading ? "제출 중..." : "제출")
+                        .font(.headline.weight(.black))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color(red: 0.145, green: 0.388, blue: 0.922), in: RoundedRectangle(cornerRadius: 14))
+                .contentShape(Rectangle())
             }
-            .font(.headline.weight(.black))
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .background(Color(red: 0.145, green: 0.388, blue: 0.922), in: RoundedRectangle(cornerRadius: 14))
+            .buttonStyle(.plain)
+            .disabled(isLoading)
             .padding(.top, 4)
         }
     }
@@ -365,7 +376,7 @@ struct NumberingView: View {
         do {
             let response = try await client
                 .from("numbering_requests")
-                .select()
+                .select("id,request_type,settlement_month,requested_at,camp,mobile_camp,driver_name,coupang_id,waybill_no,quantity")
                 .order("requested_at", ascending: false)
                 .limit(500)
                 .execute()
@@ -459,7 +470,15 @@ struct NumberingView: View {
                 camp: ctx.camp,
                 mobileCamp: mobileCamp
             )
-            try await client.from("numbering_requests").insert(payload).execute()
+            let insertResponse = try await client
+                .from("numbering_requests")
+                .insert(payload)
+                .select("id")
+                .single()
+                .execute()
+            guard !insertResponse.data.isEmpty else {
+                throw NumberingError.message("요청 이력 저장 결과를 확인하지 못했습니다.")
+            }
             activeAlert = .success
         } catch {
             activeAlert = .error("제출 실패: \(error.localizedDescription)")
@@ -829,7 +848,7 @@ private struct NumberingContext: Decodable, Identifiable {
 }
 
 private struct NumberingHistoryRow: Decodable, Identifiable {
-    let id: Int64
+    let id: UUID
     let requestType: String
     let settlementMonth: String?
     let requestedAt: String
