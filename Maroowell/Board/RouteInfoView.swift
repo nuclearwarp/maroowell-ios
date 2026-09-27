@@ -21,7 +21,7 @@ struct RouteInfoView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             guard session.canView("/maroowell_route_info"), store.rows.isEmpty else { return }
-            await store.load()
+            await store.load(camp: session.campCode)
         }
         .sheet(item: $selectedRow) { row in
             RouteInfoDetail(row: row)
@@ -426,14 +426,25 @@ private final class RouteInfoStore: ObservableObject {
         }
     }
 
-    func load() async {
+    func load(camp: String) async {
         guard !loading else { return }
+        let requestedCamp = Self.databaseCamp(camp)
+        guard !requestedCamp.isEmpty else {
+            rows = []
+            message = "소속 캠프를 확인하지 못했습니다."
+            return
+        }
         loading = true
         defer { loading = false }
         do {
             let auth = try await SupabaseService.shared.client.auth.session
             var c = URLComponents(url: AppConfig.supabaseURL.appendingPathComponent("rest/v1/maroowell_route_info"), resolvingAgainstBaseURL: false)!
-            c.query = "select=id,camp,route,sub,sub_sub,sub_package,route_code,route_norm,description,memo,coordinate,sort_order,is_active&order=camp.asc,route.asc,sort_order.asc&limit=500"
+            c.queryItems = [
+                URLQueryItem(name: "select", value: "id,camp,route,sub,sub_sub,sub_package,route_code,route_norm,description,memo,coordinate,sort_order,is_active"),
+                URLQueryItem(name: "camp", value: "eq.(requestedCamp)"),
+                URLQueryItem(name: "order", value: "camp.asc,route.asc,sort_order.asc"),
+                URLQueryItem(name: "limit", value: "500")
+            ]
             var request = URLRequest(url: c.url!)
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue(AppConfig.supabasePublishableKey, forHTTPHeaderField: "apikey")
@@ -453,6 +464,15 @@ private final class RouteInfoStore: ObservableObject {
             rows = []
             message = error.localizedDescription
         }
+    }
+
+    private static func databaseCamp(_ raw: String) -> String {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.uppercased().hasPrefix("M_") { return value }
+        if value.uppercased().hasPrefix("M"), value.count > 1 {
+            return "M_" + String(value.dropFirst())
+        }
+        return value
     }
 
     private static func row(_ object: [String: Any]) -> RouteInfoRow {
