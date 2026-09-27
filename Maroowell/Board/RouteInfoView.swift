@@ -441,7 +441,7 @@ private final class RouteInfoStore: ObservableObject {
             var c = URLComponents(url: AppConfig.supabaseURL.appendingPathComponent("rest/v1/maroowell_route_info"), resolvingAgainstBaseURL: false)!
             c.queryItems = [
                 URLQueryItem(name: "select", value: "id,camp,route,sub,sub_sub,sub_package,route_code,route_norm,description,memo,coordinate,sort_order,is_active"),
-                URLQueryItem(name: "camp", value: "eq.(requestedCamp)"),
+                URLQueryItem(name: "camp", value: "eq.\(requestedCamp)"),
                 URLQueryItem(name: "order", value: "camp.asc,route.asc,sort_order.asc"),
                 URLQueryItem(name: "limit", value: "500")
             ]
