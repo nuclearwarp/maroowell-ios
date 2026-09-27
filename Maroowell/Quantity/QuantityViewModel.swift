@@ -20,26 +20,27 @@ final class QuantityViewModel: ObservableObject {
         let resolvedStore = store ?? .shared
         self.store = resolvedStore
         self.selectedDate = date
-        self.campHint = campHint.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.routeHints = Array(Set(routeHints.map {
+        let normalizedCampHint = campHint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedRouteHints = Array(Set(routeHints.map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         }.filter { !$0.isEmpty && $0 != "휴무" })).sorted()
+
+        self.campHint = normalizedCampHint
+        self.routeHints = normalizedRouteHints
 
         let record = resolvedStore.load(date)
         if let record, !record.routes.isEmpty {
             self.routes = record.routes
+        } else if normalizedRouteHints.isEmpty {
+            self.routes = [Self.emptyRoute(campName: normalizedCampHint)]
         } else {
-            if self.routeHints.isEmpty {
-                self.routes = [Self.emptyRoute(campName: self.campHint)]
-            } else {
-                self.routes = self.routeHints.map { routeName in
-                    Self.seededRoute(
-                        store: resolvedStore,
-                        date: date,
-                        campName: self.campHint,
-                        routeName: routeName
-                    )
-                }
+            self.routes = normalizedRouteHints.map { routeName in
+                Self.seededRoute(
+                    store: resolvedStore,
+                    date: date,
+                    campName: normalizedCampHint,
+                    routeName: routeName
+                )
             }
         }
         self.memo = record?.memo ?? ""
