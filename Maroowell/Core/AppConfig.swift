@@ -20,4 +20,14 @@ enum AppConfig {
         }
         return value
     }
+
+    static var kakaoJavascriptKey: String {
+        guard
+            let value = Bundle.main.object(forInfoDictionaryKey: "KAKAO_JAVASCRIPT_KEY") as? String,
+            !value.isEmpty
+        else {
+            preconditionFailure("KAKAO_JAVASCRIPT_KEY is missing from Info.plist")
+        }
+        return value
+    }
 }

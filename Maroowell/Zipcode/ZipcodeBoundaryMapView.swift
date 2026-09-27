@@ -1,12 +1,11 @@
+import CoreLocation
 import Foundation
-import MapKit
 import SwiftUI
 
 struct ZipcodeBoundaryMapView: View {
     let session: AppSession
     @StateObject private var store = ZipcodeBoundaryMapStore()
     @State private var input = ""
-    @State private var camera: MapCameraPosition = .automatic
 
     var body: some View {
         Group {
@@ -22,13 +21,16 @@ struct ZipcodeBoundaryMapView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            Map(position: $camera) {
-                ForEach(store.rings) { ring in
-                    MapPolygon(coordinates: ring.coordinates)
-                        .foregroundStyle(.yellow.opacity(0.16))
-                        .stroke(.orange, lineWidth: 2)
-                }
-            }
+            KakaoMapWebView(
+                polygons: store.rings.map { ring in
+                    KakaoMapPolygon(
+                        id: ring.id.uuidString,
+                        coordinates: ring.coordinates,
+                        label: ring.zip
+                    )
+                },
+                fitContent: true
+            )
             .frame(minHeight: 310)
             .overlay(alignment: .topLeading) {
                 Text(store.rings.isEmpty ? "우편번호를 입력하세요" : "경계 \(store.rings.count)개")
@@ -45,10 +47,10 @@ struct ZipcodeBoundaryMapView: View {
                     HStack(spacing: 8) {
                         Button("지도표시") {
                             let zips = ZipcodeBoundaryInput.parse(input)
-                            Task { await store.load(zips); fit() }
+                            Task { await store.load(zips) }
                         }
                         .buttonStyle(.borderedProminent).disabled(store.loading)
-                        Button("초기화") { input = ""; store.clear(); camera = .automatic }
+                        Button("초기화") { input = ""; store.clear() }
                             .buttonStyle(.bordered)
                     }
                     HStack {
@@ -63,17 +65,6 @@ struct ZipcodeBoundaryMapView: View {
                 }.padding(14)
             }.background(MaroowellTheme.background)
         }
-    }
-
-    private func fit() {
-        let coordinates = store.rings.flatMap(\.coordinates)
-        guard !coordinates.isEmpty else { return }
-        let lats = coordinates.map(\.latitude), lons = coordinates.map(\.longitude)
-        guard let a = lats.min(), let b = lats.max(), let c = lons.min(), let d = lons.max() else { return }
-        camera = .region(MKCoordinateRegion(
-            center: .init(latitude: (a + b) / 2, longitude: (c + d) / 2),
-            span: .init(latitudeDelta: max(b - a, 0.01) * 1.25, longitudeDelta: max(d - c, 0.01) * 1.25)
-        ))
     }
 
     private var denied: some View {

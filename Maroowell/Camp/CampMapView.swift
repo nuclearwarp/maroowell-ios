@@ -1,12 +1,12 @@
+import CoreLocation
 import Foundation
-import MapKit
 import SwiftUI
 
 struct CampMapView: View {
     let session: AppSession
     let initialQuery: String
     @StateObject private var store = CampMapStore()
-    @State private var camera: MapCameraPosition = .automatic
+    @State private var focusedCampID: String?
 
     init(session: AppSession, query: String = "") {
         self.session = session
@@ -24,7 +24,6 @@ struct CampMapView: View {
             if store.rows.isEmpty {
                 store.query = initialQuery
                 await store.load()
-                fit()
             }
         }
         .alert("쿠팡 캠프 지도", isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) {
@@ -38,20 +37,27 @@ struct CampMapView: View {
                 TextField("캠프 · 지역 · 코드 검색", text: $store.query)
                     .textFieldStyle(.roundedBorder)
                     .submitLabel(.search)
-                    .onSubmit { Task { await store.load(); fit() } }
-                Button("검색") { Task { await store.load(); fit() } }
+                    .onSubmit { Task { await store.load() } }
+                Button("검색") { Task { await store.load() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(store.loading)
             }
             .padding(12)
             .background(Color.white)
 
-            Map(position: $camera) {
-                ForEach(store.rows) { row in
-                    Marker(row.markerLabel, coordinate: row.coordinate)
-                        .tint(row.isSubHub ? .orange : .blue)
-                }
-            }
+            KakaoMapWebView(
+                markers: store.rows.map { row in
+                    KakaoMapMarker(
+                        id: row.id,
+                        coordinate: row.coordinate,
+                        label: row.markerLabel,
+                        address: row.address,
+                        kind: row.type
+                    )
+                },
+                fitContent: focusedCampID == nil,
+                focusMarkerID: focusedCampID
+            )
             .overlay(alignment: .topLeading) {
                 HStack(spacing: 7) {
                     if store.loading { ProgressView().controlSize(.small) }
@@ -68,7 +74,7 @@ struct CampMapView: View {
                     HStack(spacing: 8) {
                         ForEach(store.rows.prefix(30)) { row in
                             Button {
-                                camera = .region(MKCoordinateRegion(center: row.coordinate, span: .init(latitudeDelta: 0.025, longitudeDelta: 0.025)))
+                                focusedCampID = row.id
                             } label: {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(row.markerLabel).font(.caption.weight(.black)).lineLimit(1)
@@ -87,15 +93,6 @@ struct CampMapView: View {
             }
         }
         .background(MaroowellTheme.background)
-    }
-
-    private func fit() {
-        guard !store.rows.isEmpty else { return }
-        let lats = store.rows.map { $0.coordinate.latitude }
-        let lons = store.rows.map { $0.coordinate.longitude }
-        guard let minLat = lats.min(), let maxLat = lats.max(), let minLon = lons.min(), let maxLon = lons.max() else { return }
-        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2)
-        camera = .region(MKCoordinateRegion(center: center, span: .init(latitudeDelta: max(maxLat - minLat, 0.04) * 1.25, longitudeDelta: max(maxLon - minLon, 0.04) * 1.25)))
     }
 
     private var denied: some View {

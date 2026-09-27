@@ -363,11 +363,16 @@ private struct CampMapSheet: View {
                     .background(MaroowellTheme.background)
                 } else {
                     VStack(spacing: 0) {
-                        Map(initialPosition: .automatic) {
-                            ForEach(points) { point in
-                                Marker(point.title, coordinate: point.coordinate)
-                            }
-                        }
+                        KakaoMapWebView(
+                            markers: points.map { point in
+                                KakaoMapMarker(
+                                    id: point.id,
+                                    coordinate: point.coordinate,
+                                    label: point.title
+                                )
+                            },
+                            fitContent: true
+                        )
                         if selection.rows.count > directPoints.count && selection.rows.count > 1 {
                             Text("좌표가 없는 \(selection.rows.count - directPoints.count)개 캠프는 지도에서 제외했습니다.")
                                 .font(.caption2)

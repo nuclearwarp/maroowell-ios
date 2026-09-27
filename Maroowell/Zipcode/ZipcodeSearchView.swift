@@ -6,7 +6,7 @@ struct ZipcodeSearchView: View {
     let session: AppSession
     @StateObject private var store = ZipcodeSearchStore()
     @State private var zipInput = ""
-    @State private var camera: MapCameraPosition = .automatic
+    @State private var focusedPlaceID: String?
 
     var body: some View {
         Group {
@@ -22,11 +22,18 @@ struct ZipcodeSearchView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            Map(position: $camera) {
-                ForEach(store.places) { place in
-                    Marker(place.name, coordinate: place.coordinate)
-                }
-            }
+            KakaoMapWebView(
+                markers: store.places.map { place in
+                    KakaoMapMarker(
+                        id: place.id.uuidString,
+                        coordinate: place.coordinate,
+                        label: place.name,
+                        address: place.address
+                    )
+                },
+                fitContent: focusedPlaceID == nil,
+                focusMarkerID: focusedPlaceID
+            )
             .frame(minHeight: 260)
             .overlay(alignment: .topTrailing) {
                 Text("지도 · 위치검색")
@@ -59,7 +66,7 @@ struct ZipcodeSearchView: View {
             if !store.places.isEmpty {
                 ForEach(store.places.prefix(6)) { p in
                     Button {
-                        camera = .region(MKCoordinateRegion(center: p.coordinate, span: MKCoordinateSpan(latitudeDelta: 0.015, longitudeDelta: 0.015)))
+                        focusedPlaceID = p.id.uuidString
                     } label: {
                         VStack(alignment: .leading, spacing: 2) { Text(p.name).font(.caption.weight(.bold)); if !p.address.isEmpty { Text(p.address).font(.caption2).foregroundStyle(MaroowellTheme.muted) } }
                             .frame(maxWidth: .infinity, alignment: .leading).padding(8).background(MaroowellTheme.background, in: RoundedRectangle(cornerRadius: 9))
@@ -109,7 +116,7 @@ struct ZipcodeSearchView: View {
     }
     private func searchLocation() async {
         await store.searchPlaces()
-        if let first = store.places.first { camera = .region(MKCoordinateRegion(center: first.coordinate, span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02))) }
+        focusedPlaceID = store.places.first?.id.uuidString
     }
     private var denied: some View {
         VStack(spacing: 10) { Image(systemName: "lock.fill").font(.largeTitle); Text("마루웰 팀장 권한 이상만 이용할 수 있습니다.").font(.headline.weight(.black)) }

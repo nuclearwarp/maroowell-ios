@@ -1,4 +1,4 @@
-import MapKit
+import CoreLocation
 import SwiftUI
 
 struct RouteInfoView: View {
@@ -266,90 +266,22 @@ private struct RoutePolygonItem: Identifiable {
     }
 }
 
-private struct RoutePolygonMapCanvas: UIViewRepresentable {
+private struct RoutePolygonMapCanvas: View {
     let polygons: [RoutePolygonItem]
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeUIView(context: Context) -> MKMapView {
-        let map = MKMapView(frame: .zero)
-        map.delegate = context.coordinator
-        map.showsCompass = true
-        map.showsScale = true
-        return map
-    }
-
-    func updateUIView(_ map: MKMapView, context: Context) {
-        map.removeOverlays(map.overlays)
-        map.removeAnnotations(map.annotations)
-
-        for item in polygons where item.coordinates.count >= 3 {
-            let polygon = MKPolygon(coordinates: item.coordinates, count: item.coordinates.count)
-            polygon.title = item.label
-            map.addOverlay(polygon)
-
-            let label = RouteLabelAnnotation()
-            label.coordinate = item.center
-            label.title = item.label
-            map.addAnnotation(label)
-        }
-        context.coordinator.fit(map)
-    }
-
-    final class Coordinator: NSObject, MKMapViewDelegate {
-        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            guard let polygon = overlay as? MKPolygon else { return MKOverlayRenderer(overlay: overlay) }
-            let renderer = MKPolygonRenderer(polygon: polygon)
-            renderer.fillColor = UIColor.systemBlue.withAlphaComponent(0.12)
-            renderer.strokeColor = UIColor.systemBlue
-            renderer.lineWidth = 2
-            return renderer
-        }
-
-        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-            guard annotation is RouteLabelAnnotation else { return nil }
-            let id = "route-label"
-            let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) ?? MKAnnotationView(annotation: annotation, reuseIdentifier: id)
-            view.annotation = annotation
-            view.canShowCallout = false
-
-            let text = UILabel()
-            text.text = annotation.title ?? ""
-            text.font = .systemFont(ofSize: 10.5, weight: .bold)
-            text.textColor = UIColor(red: 0.12, green: 0.23, blue: 0.54, alpha: 1)
-            text.backgroundColor = UIColor.white.withAlphaComponent(0.94)
-            text.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.45).cgColor
-            text.layer.borderWidth = 1
-            text.layer.cornerRadius = 7
-            text.layer.masksToBounds = true
-            text.textAlignment = .center
-            text.sizeToFit()
-            text.frame.size.width += 12
-            text.frame.size.height = max(22, text.frame.size.height + 6)
-
-            view.subviews.forEach { $0.removeFromSuperview() }
-            view.frame = text.bounds
-            view.centerOffset = .zero
-            view.addSubview(text)
-            return view
-        }
-
-        func fit(_ map: MKMapView) {
-            var rect = MKMapRect.null
-            for overlay in map.overlays {
-                rect = rect.union(overlay.boundingMapRect)
-            }
-            guard !rect.isNull, !rect.isEmpty else { return }
-            map.setVisibleMapRect(
-                rect,
-                edgePadding: UIEdgeInsets(top: 54, left: 28, bottom: 54, right: 28),
-                animated: false
-            )
-        }
+    var body: some View {
+        KakaoMapWebView(
+            polygons: polygons.map { item in
+                KakaoMapPolygon(
+                    id: item.id.uuidString,
+                    coordinates: item.coordinates,
+                    label: item.label
+                )
+            },
+            fitContent: true
+        )
     }
 }
-
-private final class RouteLabelAnnotation: MKPointAnnotation {}
 
 @MainActor
 private final class RoutePolygonStore: ObservableObject {
