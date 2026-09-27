@@ -115,7 +115,7 @@ struct RouteInfoView: View {
                 }
                 Spacer()
                 Button {
-                    Task { await store.load() }
+                    Task { await store.load(camp: session.campCode) }
                 } label: {
                     Label("새로고침", systemImage: "arrow.clockwise")
                 }
