@@ -575,14 +575,14 @@ private struct HomeMenuRow: View {
     }
 
     private func isRangkongArtwork(_ assetName: String) -> Bool {
-        assetName == "menu_numbering" || assetName == "menu_quantity_stats"
+        assetName == "menu_numbering_rangkong" || assetName == "menu_quantity_stats_rangkong"
     }
 
     private func androidAssetName(for title: String) -> String? {
         switch title {
         case "배송 수량 등록": return "menu_freshbag_status"
-        case "배송 통계": return "menu_quantity_stats"
-        case "채번": return "menu_numbering"
+        case "배송 통계": return "menu_quantity_stats_rangkong"
+        case "채번": return "menu_numbering_rangkong"
         case "입차 스케줄": return "menu_schedule"
         case "실시간 배송 현황": return "menu_realtime"
         case "운수종사자 일상점검": return "menu_daily_inspection"
