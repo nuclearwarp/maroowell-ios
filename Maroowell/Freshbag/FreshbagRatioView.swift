@@ -134,10 +134,11 @@ struct FreshbagRatioView: View {
             HStack(spacing: 9) {
                 pickerField("Camp") {
                     Picker("Camp", selection: $store.selectedCampIndex) {
-                        ForEach(Array(FreshbagCampOption.options.enumerated()), id: \.offset) { index, option in
+                        ForEach(Array(store.availableCamps.enumerated()), id: \.offset) { index, option in
                             Text(option.display).tag(index)
                         }
                     }
+                    .disabled(true)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("주간/야간")
