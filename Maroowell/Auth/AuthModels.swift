@@ -26,11 +26,15 @@ struct AccountAccess: Decodable {
     }
 }
 
-struct DisplayNameRow: Decodable {
+struct ProfileSessionRow: Decodable {
     let displayName: String?
+    let campCode: String?
+    let wave: String?
 
     enum CodingKeys: String, CodingKey {
         case displayName = "display_name"
+        case campCode = "camp_code"
+        case wave
     }
 }
 
@@ -42,6 +46,8 @@ struct AppSession: Equatable {
     let isAdmin: Bool
     let roleLevel: Int
     let isDragonCarAdmin: Bool
+    let campCode: String
+    let wave: String
     let visiblePaths: Set<String>
 
     var isTeamLeader: Bool {
