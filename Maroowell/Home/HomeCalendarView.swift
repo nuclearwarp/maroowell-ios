@@ -140,8 +140,9 @@ struct HomeCalendarView: View {
         let hasNight = activeEntries.contains { $0.wave == "WAVE1" }
         let inspectionDone = inspectionStore.hasDay(day.date)
         let isFuture = HomeSettlementCalendarPolicy.isFuture(day.date)
+        let hasQuantity = quantityStore.hasRecord(day.date)
         let amount = quantityStore.load(day.date).map(quantityStore.amount(of:))
-        let campText = calendarCampText(entries, date: day.date)
+        let campText = hasQuantity ? "" : calendarCampText(entries, date: day.date)
         let isToday = HomeSettlementCalendarPolicy.isToday(day.date)
         let holidayName = holidayStore.holiday(for: day.date)
         let memoText = memoStore.memo(for: day.date)
@@ -391,8 +392,10 @@ private struct HomeCalendarDaySheet: View {
                         .buttonStyle(.plain)
                     }
 
+                    let campHint = activeEntries.first?.camp ?? ""
+                    let routeHints = Array(Set(activeEntries.flatMap(\.routes).filter { $0 != "휴무" })).sorted()
                     NavigationLink {
-                        QuantityView(date: date)
+                        QuantityView(date: date, campHint: campHint, routeHints: routeHints)
                     } label: {
                         Label("배송 수량 등록", systemImage: "shippingbox.fill")
                             .font(.headline.weight(.black))

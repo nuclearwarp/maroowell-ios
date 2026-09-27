@@ -5,8 +5,14 @@ struct QuantityView: View {
     @State private var showMessage = false
 
     @MainActor
-    init(date: Date = .now) {
-        _viewModel = StateObject(wrappedValue: QuantityViewModel(date: date))
+    init(date: Date = .now, campHint: String = "", routeHints: [String] = []) {
+        _viewModel = StateObject(
+            wrappedValue: QuantityViewModel(
+                date: date,
+                campHint: campHint,
+                routeHints: routeHints
+            )
+        )
     }
 
     var body: some View {

@@ -8,13 +8,40 @@ final class QuantityViewModel: ObservableObject {
     @Published var saveMessage: String?
 
     private let store: QuantityStore
+    private var campHint: String
+    private var routeHints: [String]
 
-    init(store: QuantityStore? = nil, date: Date = .now) {
+    init(
+        store: QuantityStore? = nil,
+        date: Date = .now,
+        campHint: String = "",
+        routeHints: [String] = []
+    ) {
         let resolvedStore = store ?? .shared
         self.store = resolvedStore
         self.selectedDate = date
+        self.campHint = campHint.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.routeHints = Array(Set(routeHints.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        }.filter { !$0.isEmpty && $0 != "휴무" })).sorted()
+
         let record = resolvedStore.load(date)
-        self.routes = record?.routes.isEmpty == false ? record!.routes : [Self.emptyRoute()]
+        if let record, !record.routes.isEmpty {
+            self.routes = record.routes
+        } else {
+            if self.routeHints.isEmpty {
+                self.routes = [Self.emptyRoute(campName: self.campHint)]
+            } else {
+                self.routes = self.routeHints.map { routeName in
+                    Self.seededRoute(
+                        store: resolvedStore,
+                        date: date,
+                        campName: self.campHint,
+                        routeName: routeName
+                    )
+                }
+            }
+        }
         self.memo = record?.memo ?? ""
     }
 
@@ -144,6 +171,7 @@ final class QuantityViewModel: ObservableObject {
                 for: selectedDate
             )
             routes = normalized
+            routeHints = []
             saveMessage = "저장 완료"
         } catch {
             saveMessage = "저장하지 못했습니다. 다시 시도해주세요."
@@ -152,7 +180,20 @@ final class QuantityViewModel: ObservableObject {
 
     private func reload() {
         let record = store.load(selectedDate)
-        routes = record?.routes.isEmpty == false ? record!.routes : [Self.emptyRoute()]
+        if let record, !record.routes.isEmpty {
+            routes = record.routes
+        } else if !routeHints.isEmpty {
+            routes = routeHints.map {
+                Self.seededRoute(
+                    store: store,
+                    date: selectedDate,
+                    campName: campHint,
+                    routeName: $0
+                )
+            }
+        } else {
+            routes = [Self.emptyRoute(campName: campHint)]
+        }
         memo = record?.memo ?? ""
         saveMessage = nil
     }
@@ -166,11 +207,36 @@ final class QuantityViewModel: ObservableObject {
         }
     }
 
-    private static func emptyRoute() -> QuantityRouteRecord {
+    private static func emptyRoute(campName: String = "") -> QuantityRouteRecord {
         QuantityRouteRecord(
             routeName: "",
-            campName: "",
+            campName: campName,
             values: Dictionary(uniqueKeysWithValues: QuantityLineKey.allCases.map { ($0.rawValue, QuantityValue()) })
+        )
+    }
+
+    private static func seededRoute(
+        store: QuantityStore,
+        date: Date,
+        campName: String,
+        routeName: String
+    ) -> QuantityRouteRecord {
+        let prices = store.recentRoutePrices(
+            anchor: date,
+            campName: campName,
+            routeName: routeName
+        )
+        let values = Dictionary(uniqueKeysWithValues: QuantityLineKey.allCases.map { key in
+            let lookup = key.followsDeliveryPrice ? QuantityLineKey.delivery : key
+            return (
+                key.rawValue,
+                QuantityValue(count: 0, unitPrice: prices[lookup] ?? 0)
+            )
+        })
+        return QuantityRouteRecord(
+            routeName: routeName,
+            campName: campName,
+            values: values
         )
     }
 }

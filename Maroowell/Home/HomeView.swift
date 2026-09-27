@@ -85,8 +85,15 @@ struct HomeView: View {
     private func destinationLink(for item: HomeMenuItem) -> some View {
         switch item.destination {
         case .quantity:
-            NavigationLink { QuantityView() } label: { HomeMenuRow(item: item, badge: nil) }
-                .buttonStyle(.plain)
+            let todayEntries = homeScheduleStore.entries(for: .now).filter { !$0.isOff }
+            let campHint = todayEntries.first?.camp ?? ""
+            let routeHints = Array(Set(todayEntries.flatMap(\.routes).filter { $0 != "휴무" })).sorted()
+            NavigationLink {
+                QuantityView(date: .now, campHint: campHint, routeHints: routeHints)
+            } label: {
+                HomeMenuRow(item: item, badge: nil)
+            }
+            .buttonStyle(.plain)
         case .quantityStats:
             NavigationLink { QuantityStatsView(session: session) } label: { HomeMenuRow(item: item, badge: nil) }
                 .buttonStyle(.plain)
@@ -144,7 +151,7 @@ struct HomeView: View {
                     .font(MaroowellBrandFont.font(size: 17))
                     .tracking(1.35)
                     .foregroundStyle(Color(red: 1.0, green: 0.77, blue: 0.0))
-                Text("v1.5.6")
+                Text("v1.5.7")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(MaroowellTheme.muted)
                     .padding(.horizontal, 6)
@@ -182,9 +189,9 @@ struct HomeView: View {
         let counts = quantityStore.settlementCounts(anchor: .now)
         let actualDates = quantityStore.settlementRecordDates(anchor: .now)
         let scheduledDates = settlementScheduledDates(start: summary.startDate, end: summary.endDate)
-        let projectedDates = actualDates.union(scheduledDates)
         let average = actualDates.isEmpty ? 0 : summary.total / Int64(actualDates.count)
-        let projected = average * Int64(projectedDates.count)
+        let expectedWorkDays = scheduledDates.isEmpty ? actualDates.count : scheduledDates.count
+        let projected = average * Int64(expectedWorkDays)
         let remaining = scheduledDates.subtracting(actualDates).count
 
         return VStack(alignment: .leading, spacing: 8) {
@@ -213,7 +220,7 @@ struct HomeView: View {
                 heroMetric(
                     title: "예상 정산액",
                     value: projected.krw,
-                    detail: "평균 \(average.krw) · 예상근무 \(projectedDates.count)일 · 남은 \(remaining)일"
+                    detail: "평균 \(average.krw) · 예상근무 \(expectedWorkDays)일 · 남은 \(remaining)일"
                 )
             }
 
