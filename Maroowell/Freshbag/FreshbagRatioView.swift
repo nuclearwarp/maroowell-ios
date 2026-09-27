@@ -439,12 +439,14 @@ private final class FreshbagRatioStore: ObservableObject {
     @Published var currentQuery: FreshbagRatioQuery?
     @Published var errorMessage: String?
 
+    let availableCamps: [FreshbagCampOption]
     private let api = FreshbagRatioAPI()
 
-    init() {
+    init(campCode: String, wave: String) {
         let parts = FreshbagDate.currentYearMonth()
         selectedYear = parts.year
         selectedMonth = parts.month
+        availableCamps = [FreshbagCampOption.assigned(camp: campCode, wave: wave)]
     }
 
     var availableYears: [Int] {
@@ -453,9 +455,9 @@ private final class FreshbagRatioStore: ObservableObject {
     }
 
     var selectedCamp: FreshbagCampOption {
-        FreshbagCampOption.options.indices.contains(selectedCampIndex)
-            ? FreshbagCampOption.options[selectedCampIndex]
-            : FreshbagCampOption.options[0]
+        availableCamps.indices.contains(selectedCampIndex)
+            ? availableCamps[selectedCampIndex]
+            : availableCamps[0]
     }
 
     var periodLabel: String {
@@ -464,6 +466,10 @@ private final class FreshbagRatioStore: ObservableObject {
     }
 
     func load() async {
+        guard !selectedCamp.db.isEmpty else {
+            errorMessage = "소속 캠프를 확인하지 못했습니다."
+            return
+        }
         let query = FreshbagRatioQuery.make(
             year: selectedYear,
             month: selectedMonth,
@@ -509,6 +515,28 @@ private struct FreshbagCampOption: Hashable {
         .init(display: "용인3", db: "용인3", wave: "W2"),
         .init(display: "일산2", db: "일산2", wave: "W2")
     ]
+
+    static func assigned(camp: String, wave: String) -> FreshbagCampOption {
+        let trimmedCamp = camp.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedCamp = FreshbagRatioFormat.normalizeCamp(trimmedCamp)
+        if let known = options.first(where: {
+            FreshbagRatioFormat.normalizeCamp($0.db) == normalizedCamp ||
+            FreshbagRatioFormat.normalizeCamp($0.display) == normalizedCamp
+        }) {
+            return known
+        }
+
+        let normalizedWave: String
+        switch wave.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
+        case "WAVE1", "W1", "1W", "야간":
+            normalizedWave = "W1"
+        case "WAVE2", "W2", "2W", "주간":
+            normalizedWave = "W2"
+        default:
+            normalizedWave = wave.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return .init(display: trimmedCamp, db: trimmedCamp, wave: normalizedWave)
+    }
 }
 
 private struct FreshbagRatioQuery: Hashable {
