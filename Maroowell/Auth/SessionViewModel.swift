@@ -107,7 +107,8 @@ final class SessionViewModel: ObservableObject {
         )
 
         let email = user.email ?? ""
-        let displayName = try await loadDisplayName(userID: user.id)
+        let profile = try await loadProfileSession(userID: user.id)
+        let displayName = profile?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             ?? email.split(separator: "@").first.map(String.init)
             ?? "마루웰"
 
@@ -119,6 +120,8 @@ final class SessionViewModel: ObservableObject {
             isAdmin: access.isAdmin,
             roleLevel: access.maxRoleLevel,
             isDragonCarAdmin: access.isDragonCarAdmin,
+            campCode: profile?.campCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            wave: profile?.wave?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
             visiblePaths: visiblePaths
         )
     }
@@ -155,16 +158,16 @@ final class SessionViewModel: ObservableObject {
         }
     }
 
-    private func loadDisplayName(userID: UUID) async throws -> String? {
+    private func loadProfileSession(userID: UUID) async throws -> ProfileSessionRow? {
         let response = try await client
             .from("profiles")
-            .select("display_name")
+            .select("display_name,camp_code,wave")
             .eq("user_id", value: userID.uuidString)
             .limit(1)
             .execute()
 
-        let rows = try JSONDecoder().decode([DisplayNameRow].self, from: response.data)
-        return rows.first?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let rows = try JSONDecoder().decode([ProfileSessionRow].self, from: response.data)
+        return rows.first
     }
 
     private func decodeFirst<T: Decodable>(from data: Data) -> T? {
