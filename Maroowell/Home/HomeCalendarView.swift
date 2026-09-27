@@ -230,17 +230,17 @@ struct HomeCalendarView: View {
     }
 
     private func dayBackground(hasDay: Bool, hasNight: Bool, isToday: Bool) -> Color {
-        if hasDay && hasNight { return Color(red: 0.949, green: 0.969, blue: 0.98) }
-        if hasNight { return Color(red: 0.969, green: 0.945, blue: 1.0) }
-        if hasDay { return Color(red: 0.941, green: 0.98, blue: 0.957) }
-        if isToday { return Color(red: 1.0, green: 0.973, blue: 0.839) }
+        if hasDay && hasNight { return Color(red: 242.0 / 255.0, green: 247.0 / 255.0, blue: 250.0 / 255.0) }
+        if hasNight { return Color(red: 247.0 / 255.0, green: 241.0 / 255.0, blue: 255.0 / 255.0) }
+        if hasDay { return Color(red: 240.0 / 255.0, green: 250.0 / 255.0, blue: 244.0 / 255.0) }
+        if isToday { return Color(red: 255.0 / 255.0, green: 248.0 / 255.0, blue: 214.0 / 255.0) }
         return .white
     }
 
     private func scheduleColor(hasDay: Bool, hasNight: Bool) -> Color {
-        if hasDay && hasNight { return Color(red: 0.14, green: 0.42, blue: 0.47) }
-        if hasNight { return Color(red: 0.44, green: 0.28, blue: 0.66) }
-        if hasDay { return Color(red: 0.09, green: 0.54, blue: 0.29) }
+        if hasDay && hasNight { return Color(red: 36.0 / 255.0, green: 107.0 / 255.0, blue: 120.0 / 255.0) }
+        if hasNight { return Color(red: 113.0 / 255.0, green: 72.0 / 255.0, blue: 168.0 / 255.0) }
+        if hasDay { return Color(red: 23.0 / 255.0, green: 138.0 / 255.0, blue: 73.0 / 255.0) }
         return MaroowellTheme.muted
     }
 
