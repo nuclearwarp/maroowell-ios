@@ -35,7 +35,15 @@ final class QuantityStore: ObservableObject {
     }
 
     func date(from key: String) -> Date? {
-        isoFormatter.date(from: key)
+        guard let parsed = isoFormatter.date(from: key) else { return nil }
+        let components = calendar.dateComponents([.year, .month, .day], from: parsed)
+        return calendar.date(from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: components.year,
+            month: components.month,
+            day: components.day,
+            hour: 12
+        ))
     }
 
     func load(_ date: Date) -> QuantityRecord? {
