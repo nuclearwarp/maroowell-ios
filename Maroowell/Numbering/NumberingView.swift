@@ -324,7 +324,9 @@ struct NumberingView: View {
     }
 
     private var filteredHistory: [NumberingHistoryRow] {
-        history.filter { ($0.settlementMonth ?? "") == selectedMonth }
+        history.filter {
+            !$0.isReturnLabel && ($0.settlementMonth ?? "") == selectedMonth
+        }
     }
 
     private func openRequest(returnLabel: Bool) async {
@@ -377,6 +379,7 @@ struct NumberingView: View {
             let response = try await client
                 .from("numbering_requests")
                 .select("id,request_type,settlement_month,requested_at,camp,mobile_camp,driver_name,coupang_id,waybill_no,quantity")
+                .eq("request_type", value: "numbering")
                 .order("requested_at", ascending: false)
                 .limit(500)
                 .execute()
