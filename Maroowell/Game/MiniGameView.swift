@@ -217,7 +217,7 @@ private final class UpUpScene: SKScene {
     private var bestScore = UserDefaults.standard.integer(forKey: "upup_best_score")
     private var started = false
     private var gameOver = false
-    private var paused = false
+    private var gamePaused = false
 
     private let playerSize = CGSize(width: 68, height: 68)
     private let gravity: CGFloat = -1680
@@ -257,7 +257,7 @@ private final class UpUpScene: SKScene {
         lastUpdateTime = 0
         started = autoStart
         gameOver = false
-        paused = false
+        gamePaused = false
 
         addChild(player)
         player.size = playerSize
@@ -397,7 +397,7 @@ private final class UpUpScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
-        guard started, !gameOver, !paused else { return }
+        guard started, !gameOver, !gamePaused else { return }
 
         let dt: CGFloat
         if lastUpdateTime == 0 {
@@ -507,9 +507,9 @@ private final class UpUpScene: SKScene {
         guard let point = touches.first?.location(in: self) else { return }
         let hitNames = Set(nodes(at: point).compactMap(\.name))
 
-        if paused {
+        if gamePaused {
             if hitNames.contains("pause_resume") {
-                paused = false
+                gamePaused = false
                 lastUpdateTime = 0
             } else if hitNames.contains("pause_restart") {
                 reset(autoStart: true)
@@ -529,7 +529,7 @@ private final class UpUpScene: SKScene {
         }
 
         if hitNames.contains("pause_button"), started {
-            paused = true
+            gamePaused = true
             horizontalDirection = 0
             return
         }
@@ -545,7 +545,7 @@ private final class UpUpScene: SKScene {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard started, !gameOver, !paused,
+        guard started, !gameOver, !gamePaused,
               let point = touches.first?.location(in: self) else { return }
         horizontalDirection = point.x < size.width / 2 ? -1 : 1
     }
@@ -573,7 +573,7 @@ private final class UpUpScene: SKScene {
         if !started && !gameOver {
             addStartPanel(to: hud)
         }
-        if paused {
+        if gamePaused {
             addPausePanel(to: hud)
         }
         if gameOver {
