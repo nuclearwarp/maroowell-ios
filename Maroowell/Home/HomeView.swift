@@ -143,6 +143,11 @@ struct HomeView: View {
                 HomeMenuRow(item: item, badge: nil)
             }
             .buttonStyle(.plain)
+        case .miniGame:
+            NavigationLink { MiniGameHubView() } label: {
+                HomeMenuRow(item: item, badge: nil)
+            }
+            .buttonStyle(.plain)
         case .campLookup:
             NavigationLink { CampLookupView(session: session) } label: { HomeMenuRow(item: item, badge: "팀장") }
                 .buttonStyle(.plain)
@@ -182,7 +187,7 @@ struct HomeView: View {
                     .font(MaroowellBrandFont.font(size: 17))
                     .tracking(1.35)
                     .foregroundStyle(Color(red: 1.0, green: 0.77, blue: 0.0))
-                Text("v1.5.9")
+                Text("v1.6.0")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(MaroowellTheme.muted)
                     .padding(.horizontal, 6)
@@ -411,6 +416,13 @@ struct HomeView: View {
                 symbol: "tshirt.fill",
                 destination: .uniformSize
             ))
+            items.append(.init(
+                tab: .more,
+                title: "미니게임",
+                subtitle: "람콩이와 올라올라 · 최고 기록에 도전",
+                symbol: "gamecontroller.fill",
+                destination: .miniGame
+            ))
             if session.isManager {
                 items.append(.init(
                     tab: .more,
@@ -504,6 +516,7 @@ private enum HomeMenuDestination {
     case metaRealtime
     case maroowellInfo
     case uniformSize
+    case miniGame
     case campLookup
     case freshbagRatio
     case accountStats
@@ -611,6 +624,7 @@ private struct HomeMenuRow: View {
         case "운수종사자 일상점검": return "menu_daily_inspection"
         case "차량 점검 / 정비": return "menu_vehicle_maintenance"
         case "지급품 사이즈": return "menu_info"
+        case "미니게임": return "menu_numbering_rangkong"
         case "마루웰 정보": return "menu_info"
         case "우편번호 검색": return "menu_zipcode"
         case "라우트 편집기": return "menu_route_editor"
