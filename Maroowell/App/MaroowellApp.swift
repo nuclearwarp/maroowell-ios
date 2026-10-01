@@ -20,6 +20,7 @@ struct RootView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var versionGate: AppVersionGateState = .checking
+    @StateObject private var popupNoticeCenter = LoginPopupNoticeCenter()
 
     var body: some View {
         ZStack {
@@ -46,12 +47,36 @@ struct RootView: View {
         .task {
             await checkRequiredVersion()
         }
+        .task(id: sessionViewModel.session?.userID) {
+            guard case .allowed = versionGate,
+                  let session = sessionViewModel.session else {
+                popupNoticeCenter.clear()
+                return
+            }
+            await popupNoticeCenter.refresh(userID: session.userID)
+        }
+        .sheet(item: $popupNoticeCenter.currentNotice) { notice in
+            LoginPopupNoticeSheet(notice: notice) { neverShowAgain in
+                guard let userID = sessionViewModel.session?.userID else {
+                    popupNoticeCenter.clear()
+                    return
+                }
+                Task {
+                    await popupNoticeCenter.close(
+                        userID: userID,
+                        notice: notice,
+                        neverShowAgain: neverShowAgain
+                    )
+                }
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task {
                 await checkRequiredVersion()
-                if case .allowed = versionGate, sessionViewModel.session != nil {
+                if case .allowed = versionGate, let session = sessionViewModel.session {
                     await PushManager.shared.resyncCurrentDevice()
+                    await popupNoticeCenter.refresh(userID: session.userID, force: true)
                 }
             }
         }
