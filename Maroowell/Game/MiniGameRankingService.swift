@@ -214,14 +214,6 @@ final class MiniGameHubModel: ObservableObject {
             }
 
             activeGame = upup
-            let localBest = UserDefaults.standard.integer(forKey: "upup_best_score")
-            if localBest > 0 {
-                try await MiniGameRankingService.submitScore(
-                    gameKey: upup.gameKey,
-                    score: localBest,
-                    countAttempt: false
-                )
-            }
 
             leaderboard = try await MiniGameRankingService.loadLeaderboard(
                 gameKey: upup.gameKey,
