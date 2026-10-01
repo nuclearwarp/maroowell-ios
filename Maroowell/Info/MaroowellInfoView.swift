@@ -367,6 +367,177 @@ private struct MaroowellInfoEditor: View {
     }
 }
 
+struct MaroowellUniformSizeView: View {
+    @State private var personName = ""
+    @State private var summerVestSize = ""
+    @State private var winterFleeceSize = ""
+    @State private var isLoading = false
+    @State private var isSaving = false
+    @State private var message: String?
+
+    var body: some View {
+        Form {
+            Section {
+                if !personName.isEmpty {
+                    LabeledContent("이름", value: personName)
+                }
+                HStack {
+                    Text("조끼 (하계용)")
+                    Spacer(minLength: 12)
+                    TextField("예: L / XL / 100", text: $summerVestSize)
+                        .multilineTextAlignment(.trailing)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                }
+                HStack {
+                    Text("후리스 (동계용)")
+                    Spacer(minLength: 12)
+                    TextField("예: L / XL / 100", text: $winterFleeceSize)
+                        .multilineTextAlignment(.trailing)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                }
+            } header: {
+                Text("지급품 사이즈")
+            } footer: {
+                Text("기사 본인은 조끼와 후리스 사이즈만 조회·수정할 수 있습니다.")
+            }
+
+            Section {
+                Button {
+                    Task { await save() }
+                } label: {
+                    HStack {
+                        Spacer()
+                        if isSaving { ProgressView().controlSize(.small) }
+                        Text(isSaving ? "저장 중..." : "사이즈 저장")
+                            .fontWeight(.black)
+                        Spacer()
+                    }
+                }
+                .disabled(isSaving || summerVestSize.count > 30 || winterFleeceSize.count > 30)
+            }
+
+            if let message {
+                Section {
+                    Text(message)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(message.contains("완료") ? Color.green : Color.red)
+                }
+            }
+        }
+        .navigationTitle("마루웰 정보")
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay {
+            if isLoading {
+                ProgressView("사이즈 불러오는 중...")
+                    .padding(18)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            }
+        }
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    @MainActor
+    private func load() async {
+        isLoading = true
+        message = nil
+        defer { isLoading = false }
+        do {
+            let row = try await request("mw_my_uniform_sizes", body: [:])
+            personName = row.personName ?? ""
+            summerVestSize = row.summerVestSize ?? ""
+            winterFleeceSize = row.winterFleeceSize ?? ""
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func save() async {
+        if summerVestSize.count > 30 || winterFleeceSize.count > 30 {
+            message = "사이즈는 30자 이하로 입력해주세요."
+            return
+        }
+        isSaving = true
+        message = nil
+        defer { isSaving = false }
+        do {
+            let row = try await request(
+                "mw_update_my_uniform_sizes",
+                body: [
+                    "p_summer_vest_size": summerVestSize,
+                    "p_winter_fleece_size": winterFleeceSize
+                ]
+            )
+            personName = row.personName ?? personName
+            summerVestSize = row.summerVestSize ?? ""
+            winterFleeceSize = row.winterFleeceSize ?? ""
+            message = "저장 완료"
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func request(_ rpc: String, body: [String: String]) async throws -> UniformSizeRow {
+        let session = try await SupabaseService.shared.client.auth.session
+        var url = AppConfig.supabaseURL
+        url.append(path: "rest/v1/rpc/\(rpc)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(AppConfig.supabasePublishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw UniformSizeError.invalidResponse
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let backend = try? JSONDecoder().decode(UniformSizeBackendError.self, from: data)
+            throw UniformSizeError.backend(backend?.message ?? backend?.error ?? "사이즈 요청 실패 (HTTP \(http.statusCode))")
+        }
+        let rows = try JSONDecoder().decode([UniformSizeRow].self, from: data)
+        guard let row = rows.first else {
+            throw UniformSizeError.backend("연결된 마루웰 인사정보를 찾지 못했습니다.")
+        }
+        return row
+    }
+
+    private struct UniformSizeRow: Decodable {
+        let personName: String?
+        let summerVestSize: String?
+        let winterFleeceSize: String?
+
+        enum CodingKeys: String, CodingKey {
+            case personName = "person_name"
+            case summerVestSize = "summer_vest_size"
+            case winterFleeceSize = "winter_fleece_size"
+        }
+    }
+
+    private struct UniformSizeBackendError: Decodable {
+        let error: String?
+        let message: String?
+    }
+
+    private enum UniformSizeError: LocalizedError {
+        case invalidResponse
+        case backend(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidResponse: return "서버 응답을 확인하지 못했습니다."
+            case .backend(let message): return message
+            }
+        }
+    }
+}
+
 @MainActor
 private final class MaroowellInfoStore: ObservableObject {
     @Published var rows: [MaroowellInfoRow] = []
