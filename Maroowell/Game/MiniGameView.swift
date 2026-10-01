@@ -110,7 +110,7 @@ private final class UpUpScene: SKScene {
         anchorPoint = .zero
     }
 
-    convenience init() {
+    override convenience init() {
         self.init(size: CGSize(width: 390, height: 844))
     }
 
