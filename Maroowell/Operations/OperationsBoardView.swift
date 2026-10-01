@@ -1,4 +1,6 @@
+import PhotosUI
 import SwiftUI
+import UIKit
 
 struct OperationsBoardView: View {
     let session: AppSession
@@ -52,7 +54,7 @@ struct OperationsBoardView: View {
 
     private var noticeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("공지사항", count: store.notices.count, actionTitle: store.canManage ? "+ 공지" : nil) {
+            sectionHeader("공지사항", count: store.notices.count, actionTitle: store.canSendNotice ? "+ 공지" : nil) {
                 editor = .notice
             }
             if store.loading && !store.loaded {
@@ -271,6 +273,16 @@ private struct OperationsEditorSheet: View {
     @State private var severity = ""
     @State private var resignationNoticeDate = ""
     @State private var noticeType = "normal"
+    @State private var noticeScope = "camp"
+    @State private var sendPush = true
+    @State private var showPopup = true
+    @State private var allowDismiss = true
+    @State private var requireAck = false
+    @State private var selectedCamps: Set<String> = []
+    @State private var selectedUsers: Set<String> = []
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var selectedPhotoData: Data?
+    @State private var selectedPhotoImage: UIImage?
     @State private var saving = false
 
     var body: some View {
@@ -283,6 +295,77 @@ private struct OperationsEditorSheet: View {
                         Text("중요").tag("important")
                         Text("긴급").tag("emergency")
                     }
+
+                    Picker("발송 대상", selection: $noticeScope) {
+                        if store.canCompanyBroadcast {
+                            Text("회사전체").tag("company")
+                        }
+                        Text("캠프 단위").tag("camp")
+                        Text("개별 계정").tag("account")
+                    }
+
+                    if noticeScope == "camp" {
+                        Section("대상 캠프") {
+                            ForEach(store.noticeCamps) { row in
+                                Toggle(isOn: Binding(
+                                    get: { selectedCamps.contains(row.camp) },
+                                    set: { checked in
+                                        if checked { selectedCamps.insert(row.camp) }
+                                        else { selectedCamps.remove(row.camp) }
+                                    }
+                                )) {
+                                    Text("\(row.camp) · \(row.registeredUsers)명")
+                                }
+                            }
+                        }
+                    } else if noticeScope == "account" {
+                        Section("개별 계정") {
+                            ForEach(store.noticeAccounts) { row in
+                                Toggle(isOn: Binding(
+                                    get: { selectedUsers.contains(row.userID) },
+                                    set: { checked in
+                                        if checked { selectedUsers.insert(row.userID) }
+                                        else { selectedUsers.remove(row.userID) }
+                                    }
+                                )) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(row.displayName.isEmpty ? row.email : row.displayName)
+                                        Text([row.camp, row.email].filter { !$0.isEmpty }.joined(separator: " · "))
+                                            .font(.caption)
+                                            .foregroundStyle(MaroowellTheme.muted)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Toggle("PUSH 발송", isOn: $sendPush)
+                    Toggle("로그인 팝업 표시", isOn: $showPopup)
+
+                    if showPopup {
+                        Toggle("다시 보지 않음 허용", isOn: $allowDismiss)
+                            .disabled(requireAck)
+                        Toggle("확인 필수", isOn: $requireAck)
+                            .onChange(of: requireAck) { _, checked in
+                                if checked { allowDismiss = false }
+                            }
+
+                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                            Label(selectedPhotoImage == nil ? "공지 이미지 선택" : "이미지 변경", systemImage: "photo")
+                        }
+                        .onChange(of: selectedPhoto) { _, item in
+                            Task { await loadSelectedNoticePhoto(item) }
+                        }
+
+                        if let selectedPhotoImage {
+                            Image(uiImage: selectedPhotoImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxHeight: 240)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                    }
+
                     TextField("제목", text: $title)
                     TextField("내용", text: $bodyText, axis: .vertical).lineLimit(4...8)
 
@@ -385,10 +468,34 @@ private struct OperationsEditorSheet: View {
         return OperationsDate.iso.string(from: Calendar(identifier: .gregorian).date(byAdding: .day, value: 60, to: date) ?? date)
     }
 
+    @MainActor
+    private func loadSelectedNoticePhoto(_ item: PhotosPickerItem?) async {
+        guard let item else {
+            selectedPhotoData = nil
+            selectedPhotoImage = nil
+            return
+        }
+        guard let raw = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: raw),
+              let jpeg = image.jpegData(compressionQuality: 0.88) else {
+            store.message = "이미지를 불러오지 못했습니다."
+            return
+        }
+        guard jpeg.count <= 10 * 1024 * 1024 else {
+            store.message = "이미지는 10MB 이하만 등록할 수 있습니다."
+            selectedPhotoData = nil
+            selectedPhotoImage = nil
+            return
+        }
+        selectedPhotoData = jpeg
+        selectedPhotoImage = image
+    }
+
     private func hydrate() {
         switch editor {
         case .notice:
-            break
+            if store.canCompanyBroadcast { noticeScope = "company" }
+            Task { await store.loadNoticeContextIfNeeded() }
         case .task(let row):
             guard let row else {
                 status = "planned"; priority = "normal"; return
@@ -413,7 +520,19 @@ private struct OperationsEditorSheet: View {
         do {
             switch editor {
             case .notice:
-                try await store.saveNotice(title: title, body: bodyText, type: noticeType)
+                try await store.sendNotice(
+                    title: title,
+                    body: bodyText,
+                    type: noticeType,
+                    scope: noticeScope,
+                    camps: Array(selectedCamps),
+                    userIDs: Array(selectedUsers),
+                    sendPush: sendPush,
+                    showPopup: showPopup,
+                    allowDismiss: allowDismiss,
+                    requireAck: requireAck,
+                    imageData: selectedPhotoData
+                )
             case .task(let row):
                 try await store.saveTask(
                     existing: row, categoryID: categoryID, title: title, body: bodyText,
@@ -441,12 +560,16 @@ private final class OperationsBoardStore: ObservableObject {
     @Published var tasks: [OperationTask] = []
     @Published var issues: [OperationIssue] = []
     @Published var categories: [OperationCategory] = []
+    @Published var noticeCamps: [NoticeTargetCamp] = []
+    @Published var noticeAccounts: [NoticeTargetAccount] = []
+    @Published var canCompanyBroadcast = false
     @Published var loading = false
     @Published var loaded = false
     @Published var message: String?
 
     let session: AppSession
     var canManage: Bool { session.isSuperAdmin }
+    var canSendNotice: Bool { session.isMaroowell && session.roleLevel >= 30 }
 
     init(session: AppSession) { self.session = session }
 
@@ -474,17 +597,125 @@ private final class OperationsBoardStore: ObservableObject {
         }
     }
 
-    func saveNotice(title: String, body: String, type: String) async throws {
-        _ = try await call("notices", method: "POST", body: [
+    func loadNoticeContextIfNeeded() async {
+        if !noticeCamps.isEmpty || !noticeAccounts.isEmpty || canCompanyBroadcast { return }
+        do {
+            let data = try await callEdgeFunction("app-push-console", payload: ["action": "context"])
+            canCompanyBroadcast = Self.bool(data["can_company_broadcast"])
+            noticeCamps = (data["camps"] as? [[String: Any]] ?? []).map {
+                NoticeTargetCamp(
+                    camp: Self.text($0["camp"]),
+                    registeredUsers: Int(Self.text($0["registered_users"])) ?? 0
+                )
+            }
+            noticeAccounts = (data["accounts"] as? [[String: Any]] ?? []).map {
+                NoticeTargetAccount(
+                    userID: Self.text($0["user_id"]),
+                    displayName: Self.text($0["display_name"]),
+                    email: Self.text($0["email"]),
+                    camp: Self.text($0["camp"])
+                )
+            }
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    func sendNotice(
+        title: String,
+        body: String,
+        type: String,
+        scope: String,
+        camps: [String],
+        userIDs: [String],
+        sendPush: Bool,
+        showPopup: Bool,
+        allowDismiss: Bool,
+        requireAck: Bool,
+        imageData: Data?
+    ) async throws {
+        if scope == "camp" && camps.isEmpty {
+            throw NSError(domain: "Notice", code: -1, userInfo: [NSLocalizedDescriptionKey: "대상 캠프를 선택하세요."])
+        }
+        if scope == "account" && userIDs.isEmpty {
+            throw NSError(domain: "Notice", code: -1, userInfo: [NSLocalizedDescriptionKey: "대상 계정을 선택하세요."])
+        }
+        if !sendPush && !showPopup {
+            throw NSError(domain: "Notice", code: -1, userInfo: [NSLocalizedDescriptionKey: "PUSH 또는 로그인 팝업을 하나 이상 선택하세요."])
+        }
+
+        let imageURL = try await uploadNoticeImage(imageData)
+        let payload: [String: Any] = [
+            "action": "send",
+            "target_scope": scope,
+            "target_camps": camps,
+            "target_user_ids": userIDs,
             "notice_type": type,
-            "target_scope": "all",
-            "target_camps": [],
             "title": title.trimmed,
             "body": body.trimmed,
-            "require_ack": false,
-            "send_push": false
-        ])
+            "send_push": sendPush,
+            "show_as_popup": showPopup,
+            "popup_image_url": imageURL,
+            "popup_allow_dismiss": allowDismiss,
+            "require_ack": requireAck
+        ]
+        _ = try await callEdgeFunction("app-notice-dispatch", payload: payload)
         await load()
+    }
+
+    private func uploadNoticeImage(_ data: Data?) async throws -> String {
+        guard let data else { return "" }
+        guard data.count <= 10 * 1024 * 1024 else {
+            throw NSError(domain: "NoticeImage", code: -1, userInfo: [NSLocalizedDescriptionKey: "이미지는 10MB 이하만 등록할 수 있습니다."])
+        }
+
+        let auth = try await SupabaseService.shared.client.auth.session
+        let userID = session.userID.uuidString.lowercased()
+        let path = "notices/\(userID)/\(Int(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString.lowercased()).jpg"
+        let encodedPath = path.split(separator: "/").map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }.joined(separator: "/")
+        let url = AppConfig.supabaseURL
+            .appendingPathComponent("storage/v1/object/app-notice-images")
+            .appendingPathComponent(encodedPath)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = data
+        request.timeoutInterval = 30
+        request.setValue(AppConfig.supabasePublishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.setValue("false", forHTTPHeaderField: "x-upsert")
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(code) else {
+            throw NSError(domain: "NoticeImage", code: code, userInfo: [NSLocalizedDescriptionKey: "공지 이미지 업로드 실패 (\(code))"])
+        }
+
+        return AppConfig.supabaseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            + "/storage/v1/object/public/app-notice-images/" + path
+    }
+
+    private func callEdgeFunction(_ name: String, payload: [String: Any]) async throws -> [String: Any] {
+        let auth = try await SupabaseService.shared.client.auth.session
+        let url = AppConfig.supabaseURL.appendingPathComponent("functions/v1/\(name)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.setValue(AppConfig.supabasePublishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+        let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        guard (200..<300).contains(code) else {
+            let text = Self.text(object["error"])
+            throw NSError(domain: "Notice", code: code, userInfo: [NSLocalizedDescriptionKey: text.isEmpty ? "공지 요청 실패 (\(code))" : text])
+        }
+        return object
     }
 
     func saveTask(
@@ -650,6 +881,20 @@ private final class NoticeBoardStore: ObservableObject {
             )
         }
     }
+}
+
+private struct NoticeTargetCamp: Identifiable {
+    var id: String { camp }
+    let camp: String
+    let registeredUsers: Int
+}
+
+private struct NoticeTargetAccount: Identifiable {
+    var id: String { userID }
+    let userID: String
+    let displayName: String
+    let email: String
+    let camp: String
 }
 
 private struct OperationNotice: Identifiable {
