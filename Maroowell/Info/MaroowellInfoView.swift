@@ -726,10 +726,11 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
     var fixedUnitPrice: String
     var dragonCarCommission: String
     var employmentAccidentInsurance: String
+    var isResignedFlag: Bool
     private let localID: UUID
 
     var id: String { pkID.map(String.init) ?? localID.uuidString }
-    var isResigned: Bool { positionTitle.contains("퇴사") }
+    var isResigned: Bool { isResignedFlag }
 
     var searchText: String {
         [personName, contactPhone, positionTitle, campCode, wave, coupangID, vehiclePlateNumber, businessName]
@@ -789,6 +790,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
             fixedUnitPrice: "",
             dragonCarCommission: "",
             employmentAccidentInsurance: "",
+            isResignedFlag: false,
             localID: UUID()
         )
     }
@@ -817,6 +819,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
         case fixedUnitPrice = "fixed_unit_price"
         case dragonCarCommission = "dragon_car_commission"
         case employmentAccidentInsurance = "employment_accident_insurance"
+        case isResignedFlag = "is_resigned"
     }
 
     init(
@@ -828,6 +831,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
         safetyHealthEducationCompletionDate: String, emergencyContactPhone: String,
         emergencyContactRelationship: String, fixedCommissionAmount: String,
         fixedUnitPrice: String, dragonCarCommission: String, employmentAccidentInsurance: String,
+        isResignedFlag: Bool = false,
         localID: UUID = UUID()
     ) {
         self.pkID = pkID
@@ -853,6 +857,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
         self.fixedUnitPrice = fixedUnitPrice
         self.dragonCarCommission = dragonCarCommission
         self.employmentAccidentInsurance = employmentAccidentInsurance
+        self.isResignedFlag = isResignedFlag
         self.localID = localID
     }
 
@@ -881,6 +886,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
         fixedUnitPrice = Self.text(c, .fixedUnitPrice)
         dragonCarCommission = Self.text(c, .dragonCarCommission)
         employmentAccidentInsurance = Self.text(c, .employmentAccidentInsurance)
+        isResignedFlag = (try? c.decodeIfPresent(Bool.self, forKey: .isResignedFlag)) ?? false
         localID = UUID()
     }
 
