@@ -80,6 +80,8 @@ enum MiniGameRankingService {
             pCountAttempt: countAttempt
         )
         let session = try await client.auth.session
+        try await verifyIntegritySession(accessToken: session.accessToken)
+
         let endpoint = AppConfig.supabaseURL
             .appendingPathComponent("rest/v1/rpc/app_submit_minigame_score")
         var request = URLRequest(url: endpoint)
@@ -102,6 +104,39 @@ enum MiniGameRankingService {
                 domain: "MiniGameScore",
                 code: status,
                 userInfo: [NSLocalizedDescriptionKey: "점수 등록 실패 (\(status)): \(body.prefix(160))"]
+            )
+        }
+    }
+
+    private static func verifyIntegritySession(accessToken: String) async throws {
+        guard let appCheckToken = await AppIntegrity.token() else {
+            throw NSError(
+                domain: "AppIntegrity",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "앱 무결성 토큰을 발급받지 못했습니다."]
+            )
+        }
+
+        let endpoint = AppConfig.supabaseURL
+            .appendingPathComponent("functions/v1/app-integrity-verify")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.setValue(AppConfig.supabasePublishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(appCheckToken, forHTTPHeaderField: "X-Firebase-AppCheck")
+        request.httpBody = Data("{}".utf8)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(status) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(
+                domain: "AppIntegrity",
+                code: status,
+                userInfo: [NSLocalizedDescriptionKey: "앱 무결성 확인 실패 (\(status)): \(body.prefix(160))"]
             )
         }
     }
