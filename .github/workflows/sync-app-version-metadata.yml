@@ -1,0 +1,52 @@
+name: Sync iOS app version metadata
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'project.yml'
+      - '.github/workflows/sync-app-version-metadata.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version and Supabase public config
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_NAME=$(sed -n 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*\([^[:space:]]*\).*/\1/p' project.yml | head -n 1)
+          VERSION_CODE=$(sed -n 's/^[[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*\([0-9][0-9]*\).*/\1/p' project.yml | head -n 1)
+          SUPABASE_URL=$(grep -o 'https://[a-z0-9]*\.supabase\.co' Maroowell/Resources/Info.plist | head -n 1)
+          SUPABASE_KEY=$(grep -o 'sb_publishable_[A-Za-z0-9_-]*' Maroowell/Resources/Info.plist | head -n 1)
+          test -n "$VERSION_NAME"
+          test -n "$VERSION_CODE"
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_KEY"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "supabase_url=$SUPABASE_URL" >> "$GITHUB_OUTPUT"
+          echo "supabase_key=$SUPABASE_KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Publish iOS version metadata
+        shell: bash
+        env:
+          VERSION_NAME: ${{ steps.meta.outputs.version_name }}
+          VERSION_CODE: ${{ steps.meta.outputs.version_code }}
+          SUPABASE_URL: ${{ steps.meta.outputs.supabase_url }}
+          SUPABASE_KEY: ${{ steps.meta.outputs.supabase_key }}
+        run: |
+          set -euo pipefail
+          jq -n             --arg platform ios             --arg version "$VERSION_NAME"             --argjson build "$VERSION_CODE"             --arg source "nuclearwarp/maroowell-ios:project.yml"             --arg commit "$GITHUB_SHA"             '{platform:$platform,version:$version,build:$build,source:$source,commit:$commit}'             > /tmp/app-source-version-ios.json
+
+          curl -fSs -X POST             "$SUPABASE_URL/storage/v1/object/app-downloads/app-source-version-ios.json"             -H "apikey: $SUPABASE_KEY"             -H 'Content-Type: application/json'             -H 'x-upsert: true'             --data-binary @/tmp/app-source-version-ios.json
+
+          curl -fSs             "$SUPABASE_URL/storage/v1/object/public/app-downloads/app-source-version-ios.json"             | jq -e --arg v "$VERSION_NAME" --argjson b "$VERSION_CODE"               '.platform=="ios" and .version==$v and .build==$b'
