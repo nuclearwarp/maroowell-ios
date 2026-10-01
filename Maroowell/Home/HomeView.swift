@@ -134,14 +134,13 @@ struct HomeView: View {
             NavigationLink { MetaRealtimeShareView() } label: { HomeMenuRow(item: item, badge: "팀장") }
                 .buttonStyle(.plain)
         case .maroowellInfo:
-            NavigationLink {
-                if session.isManager {
-                    MaroowellInfoView()
-                } else {
-                    MaroowellUniformSizeView()
-                }
-            } label: {
-                HomeMenuRow(item: item, badge: session.isManager ? "관리자" : nil)
+            NavigationLink { MaroowellInfoView() } label: {
+                HomeMenuRow(item: item, badge: "관리자")
+            }
+            .buttonStyle(.plain)
+        case .uniformSize:
+            NavigationLink { MaroowellUniformSizeView() } label: {
+                HomeMenuRow(item: item, badge: nil)
             }
             .buttonStyle(.plain)
         case .campLookup:
@@ -407,11 +406,20 @@ struct HomeView: View {
         if session.isMaroowell {
             items.append(.init(
                 tab: .more,
-                title: "마루웰 정보",
-                subtitle: session.isManager ? "인원 기본정보 조회 · 수정 · 추가" : "내 조끼 · 후리스 사이즈 확인 및 수정",
-                symbol: "building.2.fill",
-                destination: .maroowellInfo
+                title: "지급품 사이즈",
+                subtitle: "조끼 · 후리스 사이즈 확인 및 수정",
+                symbol: "tshirt.fill",
+                destination: .uniformSize
             ))
+            if session.isManager {
+                items.append(.init(
+                    tab: .more,
+                    title: "마루웰 정보",
+                    subtitle: "인원 기본정보 조회 · 수정 · 추가",
+                    symbol: "building.2.fill",
+                    destination: .maroowellInfo
+                ))
+            }
         }
 
         let webItems: [(HomeTab, String, String, String, String)] = [
@@ -495,6 +503,7 @@ private enum HomeMenuDestination {
     case schedule
     case metaRealtime
     case maroowellInfo
+    case uniformSize
     case campLookup
     case freshbagRatio
     case accountStats
@@ -601,6 +610,7 @@ private struct HomeMenuRow: View {
         case "실시간 배송 현황": return "menu_realtime"
         case "운수종사자 일상점검": return "menu_daily_inspection"
         case "차량 점검 / 정비": return "menu_vehicle_maintenance"
+        case "지급품 사이즈": return "menu_info"
         case "마루웰 정보": return "menu_info"
         case "우편번호 검색": return "menu_zipcode"
         case "라우트 편집기": return "menu_route_editor"
