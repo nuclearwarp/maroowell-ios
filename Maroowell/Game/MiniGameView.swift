@@ -1,8 +1,15 @@
 import SpriteKit
 import SwiftUI
+import UIKit
+
+extension Notification.Name {
+    static let upUpScoreUpdated = Notification.Name("upup_score_updated")
+    static let upUpExitRequested = Notification.Name("upup_exit_requested")
+}
 
 struct MiniGameHubView: View {
     @AppStorage("upup_best_score") private var bestScore = 0
+    @StateObject private var model = MiniGameHubModel()
 
     var body: some View {
         ScrollView {
@@ -11,57 +18,161 @@ struct MiniGameHubView: View {
                     .font(.system(size: 28, weight: .black, design: .rounded))
                     .foregroundStyle(MaroowellTheme.ink)
 
-                Text("짧고 간단하게, 최고 기록에 도전하세요.")
+                Text("시즌별 활성 게임만 표시됩니다. 최고 점수에 도전해보세요.")
                     .font(.subheadline)
                     .foregroundStyle(MaroowellTheme.muted)
 
-                NavigationLink {
-                    UpUpGameView()
-                } label: {
-                    VStack(spacing: 12) {
-                        Image("menu_numbering_rangkong")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 180)
-
-                        Text("올라올라")
-                            .font(.title2.weight(.black))
-                            .foregroundStyle(MaroowellTheme.ink)
-
-                        Text("람콩이와 뒤집힌 토트박스를 밟고 계속 올라가세요.")
-                            .font(.caption)
-                            .foregroundStyle(MaroowellTheme.muted)
-                            .multilineTextAlignment(.center)
-
-                        Text("최고 기록 \(bestScore)점")
-                            .font(.subheadline.weight(.black))
-                            .foregroundStyle(MaroowellTheme.deepYellow)
-
-                        Text("게임 시작")
-                            .font(.headline.weight(.black))
-                            .foregroundStyle(MaroowellTheme.ink)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(MaroowellTheme.yellow, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                    .padding(18)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 22))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22)
-                            .stroke(MaroowellTheme.border)
-                    }
+                if let game = model.activeGame {
+                    gameCard(game)
+                    rankingCard(game)
+                } else if model.isLoading {
+                    ProgressView("활성 게임을 불러오는 중...")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                } else {
+                    Text(model.errorMessage ?? "현재 활성화된 미니게임이 없습니다.")
+                        .font(.subheadline)
+                        .foregroundStyle(MaroowellTheme.muted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
                 }
-                .buttonStyle(.plain)
             }
             .padding(18)
         }
         .background(MaroowellTheme.background)
         .navigationTitle("미니게임")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await model.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .upUpScoreUpdated)) { _ in
+            Task { await model.refresh() }
+        }
+    }
+
+    @ViewBuilder
+    private func gameCard(_ game: MiniGameConfig) -> some View {
+        NavigationLink { UpUpGameView() } label: {
+            VStack(spacing: 10) {
+                upUpCover
+                    .frame(width: 112, height: 112)
+
+                Text(game.displayName)
+                    .font(.title2.weight(.black))
+                    .foregroundStyle(MaroowellTheme.ink)
+
+                Text("람콩이와 뒤집힌 토트박스를 밟고 끝없이 올라가세요.")
+                    .font(.caption)
+                    .foregroundStyle(MaroowellTheme.muted)
+                    .multilineTextAlignment(.center)
+
+                Text("내 기기 최고 기록  \(bestScore)점")
+                    .font(.subheadline.weight(.black))
+                    .foregroundStyle(MaroowellTheme.deepYellow)
+
+                Text("게임 시작")
+                    .font(.headline.weight(.black))
+                    .foregroundStyle(MaroowellTheme.ink)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(MaroowellTheme.yellow, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .padding(18)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 22))
+            .overlay { RoundedRectangle(cornerRadius: 22).stroke(MaroowellTheme.border) }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var upUpCover: some View {
+        Group {
+            if let url = Bundle.main.url(forResource: "game_upup_cover", withExtension: "webp"),
+               let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image).resizable().scaledToFit()
+            } else {
+                Image("menu_numbering_rangkong").resizable().scaledToFit()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rankingCard(_ game: MiniGameConfig) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("올라올라 랭킹")
+                .font(.title3.weight(.black))
+                .foregroundStyle(MaroowellTheme.ink)
+
+            if let rank = model.leaderboard.myRank, let score = model.leaderboard.myScore {
+                Text("내 순위  \(rank)위 · \(score)점")
+                    .font(.headline.weight(.black))
+            } else {
+                Text("아직 등록된 내 기록이 없습니다.")
+                    .font(.headline.weight(.black))
+            }
+
+            Text("\(game.seasonKey) 시즌 · 전체 1~10위 · 계정별 최고점 1개")
+                .font(.caption)
+                .foregroundStyle(MaroowellTheme.muted)
+
+            if model.leaderboard.rows.isEmpty {
+                Text("첫 번째 기록에 도전해보세요.")
+                    .font(.subheadline)
+                    .foregroundStyle(MaroowellTheme.muted)
+                    .padding(.vertical, 8)
+            } else {
+                ForEach(model.leaderboard.rows) { row in
+                    rankRow(row)
+                }
+            }
+
+            Button("랭킹 새로고침") {
+                Task { await model.refresh() }
+            }
+            .font(.subheadline.weight(.bold))
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(MaroowellTheme.background, in: RoundedRectangle(cornerRadius: 12))
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 22))
+        .overlay { RoundedRectangle(cornerRadius: 22).stroke(MaroowellTheme.border) }
+    }
+
+    private func rankRow(_ row: MiniGameRankRow) -> some View {
+        let isMe = row.userID == model.leaderboard.currentUserID
+        return HStack(spacing: 10) {
+            Text(rankSymbol(row.rank))
+                .font(row.rank <= 3 ? .title3 : .caption.weight(.bold))
+                .frame(width: 34)
+
+            Text("\(row.organizationLabel) / \(row.displayName) / \(row.groupLabel)" + (isMe ? " · 나" : ""))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(MaroowellTheme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Spacer(minLength: 6)
+            Text("\(row.score)점")
+                .font(.subheadline.weight(.black))
+                .foregroundStyle(MaroowellTheme.deepYellow)
+        }
+        .padding(.vertical, 7)
+        .padding(.horizontal, 6)
+        .background(isMe ? MaroowellTheme.yellow.opacity(0.15) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func rankSymbol(_ rank: Int) -> String {
+        switch rank {
+        case 1: return "🥇"
+        case 2: return "🥈"
+        case 3: return "🥉"
+        default: return "\(rank)위"
+        }
     }
 }
 
 struct UpUpGameView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var scene = UpUpScene()
 
     var body: some View {
@@ -69,8 +180,9 @@ struct UpUpGameView: View {
             .ignoresSafeArea(edges: .bottom)
             .navigationTitle("올라올라")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                scene.scaleMode = .resizeFill
+            .onAppear { scene.scaleMode = .resizeFill }
+            .onReceive(NotificationCenter.default.publisher(for: .upUpExitRequested)) { _ in
+                dismiss()
             }
     }
 }
@@ -88,7 +200,14 @@ private final class TotePlatform {
 }
 
 private final class UpUpScene: SKScene {
-    private let player = SKSpriteNode(imageNamed: "menu_numbering_rangkong")
+    private let player: SKSpriteNode = {
+        let full = SKTexture(imageNamed: "menu_numbering_rangkong")
+        let cropped = SKTexture(
+            rect: CGRect(x: 0, y: 0.10, width: 1, height: 0.90),
+            in: full
+        )
+        return SKSpriteNode(texture: cropped)
+    }()
     private var platforms: [TotePlatform] = []
     private var horizontalDirection: CGFloat = 0
     private var velocity = CGVector.zero
@@ -98,8 +217,9 @@ private final class UpUpScene: SKScene {
     private var bestScore = UserDefaults.standard.integer(forKey: "upup_best_score")
     private var started = false
     private var gameOver = false
+    private var paused = false
 
-    private let playerSize = CGSize(width: 56, height: 56)
+    private let playerSize = CGSize(width: 68, height: 68)
     private let gravity: CGFloat = -1680
     private let jumpSpeed: CGFloat = 700
     private let moveSpeed: CGFloat = 270
@@ -137,14 +257,15 @@ private final class UpUpScene: SKScene {
         lastUpdateTime = 0
         started = autoStart
         gameOver = false
+        paused = false
 
         addChild(player)
         player.size = playerSize
         player.zPosition = 20
 
         let baseWidth = min(118, size.width * 0.33)
-        let baseY: CGFloat = 120
-        let base = makeTote(width: baseWidth, height: 36, color: nextToteColor())
+        let baseY: CGFloat = 135
+        let base = makeTote(width: baseWidth, height: 60, color: nextToteColor())
         base.node.position = CGPoint(x: size.width / 2, y: baseY)
         addChild(base.node)
         platforms.append(base)
@@ -154,10 +275,10 @@ private final class UpUpScene: SKScene {
             y: baseY + base.height / 2 + playerSize.height / 2
         )
 
-        var y = baseY + 112
+        var y = baseY + 122
         while y < size.height + 220 {
             addPlatform(y: y)
-            y += CGFloat(Int.random(in: 88...126))
+            y += CGFloat(Int.random(in: 100...138))
         }
 
         addBackgroundDecoration()
@@ -181,9 +302,9 @@ private final class UpUpScene: SKScene {
     }
 
     private func addPlatform(y: CGFloat) {
-        let width = CGFloat(Int.random(in: 92...126))
+        let width = CGFloat(Int.random(in: 96...132))
         let x = CGFloat.random(in: width / 2 ... max(width / 2, size.width - width / 2))
-        let platform = makeTote(width: width, height: 36, color: nextToteColor())
+        let platform = makeTote(width: width, height: 60, color: nextToteColor())
         platform.node.position = CGPoint(x: x, y: y)
         addChild(platform.node)
         platforms.append(platform)
@@ -192,54 +313,91 @@ private final class UpUpScene: SKScene {
     private func nextToteColor() -> SKColor {
         let value = Int.random(in: 0..<100)
         switch value {
-        case 0..<56:
-            return SKColor(red: 119/255, green: 204/255, blue: 232/255, alpha: 1)
-        case 56..<78:
-            return SKColor(red: 153/255, green: 108/255, blue: 72/255, alpha: 1)
-        case 78..<92:
-            return SKColor(red: 67/255, green: 163/255, blue: 96/255, alpha: 1)
+        case 0..<48:
+            return SKColor(red: 45/255, green: 161/255, blue: 224/255, alpha: 1)
+        case 48..<67:
+            return SKColor(red: 157/255, green: 103/255, blue: 66/255, alpha: 1)
+        case 67..<82:
+            return SKColor(red: 44/255, green: 168/255, blue: 86/255, alpha: 1)
+        case 82..<94:
+            return SKColor(red: 224/255, green: 61/255, blue: 62/255, alpha: 1)
         default:
-            return SKColor(red: 211/255, green: 70/255, blue: 68/255, alpha: 1)
+            return SKColor(red: 205/255, green: 211/255, blue: 216/255, alpha: 1)
         }
     }
 
     private func makeTote(width: CGFloat, height: CGFloat, color: SKColor) -> TotePlatform {
         let root = SKNode()
+        let dark = shade(color, factor: 0.50)
+        let mid = shade(color, factor: 0.78)
 
-        let body = SKShapeNode(rectOf: CGSize(width: width, height: height - 7), cornerRadius: 6)
+        let body = SKShapeNode(rectOf: CGSize(width: width, height: height - 8), cornerRadius: 5)
         body.fillColor = color
-        body.strokeColor = color.withAlphaComponent(0.78)
-        body.position.y = -3.5
+        body.strokeColor = dark
+        body.lineWidth = 1.4
+        body.position.y = -1
         root.addChild(body)
 
-        let lip = SKShapeNode(rectOf: CGSize(width: width + 8, height: 9), cornerRadius: 4)
-        lip.fillColor = color.withAlphaComponent(0.78)
-        lip.strokeColor = .clear
-        lip.position.y = height / 2 - 4.5
-        root.addChild(lip)
+        let topLip = SKShapeNode(rectOf: CGSize(width: width + 5, height: 10), cornerRadius: 4)
+        topLip.fillColor = mid
+        topLip.strokeColor = .clear
+        topLip.position.y = height / 2 - 5
+        root.addChild(topLip)
 
-        let highlight = SKShapeNode(rectOf: CGSize(width: width - 14, height: 5), cornerRadius: 2)
-        highlight.fillColor = SKColor.white.withAlphaComponent(0.18)
+        let highlight = SKShapeNode(rectOf: CGSize(width: width - 16, height: 4), cornerRadius: 2)
+        highlight.fillColor = SKColor.white.withAlphaComponent(0.28)
         highlight.strokeColor = .clear
-        highlight.position.y = height / 2 - 10
+        highlight.position.y = height / 2 - 6
         root.addChild(highlight)
 
-        for index in 1...4 {
-            let path = CGMutablePath()
-            let x = -width / 2 + width * CGFloat(index) / 5
-            path.move(to: CGPoint(x: x, y: -height / 2 + 5))
-            path.addLine(to: CGPoint(x: x, y: height / 2 - 14))
-            let rib = SKShapeNode(path: path)
-            rib.strokeColor = color.withAlphaComponent(0.68)
-            rib.lineWidth = 1.2
-            root.addChild(rib)
+        let panel = SKShapeNode(rectOf: CGSize(width: width * 0.46, height: height * 0.38), cornerRadius: 3)
+        panel.fillColor = shade(color, factor: 0.66)
+        panel.strokeColor = dark
+        panel.lineWidth = 1.2
+        panel.position.y = -2
+        root.addChild(panel)
+
+        for side: CGFloat in [-1, 1] {
+            let post = SKShapeNode(rectOf: CGSize(width: 7, height: height - 19), cornerRadius: 2)
+            post.fillColor = dark
+            post.strokeColor = .clear
+            post.position = CGPoint(x: side * (width / 2 - 9), y: -2)
+            root.addChild(post)
+
+            let bracePath = CGMutablePath()
+            bracePath.move(to: CGPoint(x: side * (width / 2 - 11), y: -height / 2 + 10))
+            bracePath.addLine(to: CGPoint(x: side * (width * 0.23), y: height * 0.12))
+            let brace = SKShapeNode(path: bracePath)
+            brace.strokeColor = dark
+            brace.lineWidth = 1.6
+            root.addChild(brace)
         }
+
+        let bottomLip = SKShapeNode(rectOf: CGSize(width: width + 6, height: 9), cornerRadius: 4)
+        bottomLip.fillColor = dark
+        bottomLip.strokeColor = .clear
+        bottomLip.position.y = -height / 2 + 4.5
+        root.addChild(bottomLip)
 
         return TotePlatform(node: root, width: width, height: height)
     }
 
+    private func shade(_ color: SKColor, factor: CGFloat) -> SKColor {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return SKColor(
+            red: min(1, red * factor),
+            green: min(1, green * factor),
+            blue: min(1, blue * factor),
+            alpha: alpha
+        )
+    }
+
     override func update(_ currentTime: TimeInterval) {
-        guard started, !gameOver else { return }
+        guard started, !gameOver, !paused else { return }
 
         let dt: CGFloat
         if lastUpdateTime == 0 {
@@ -276,6 +434,21 @@ private final class UpUpScene: SKScene {
                    newBottom <= top {
                     player.position.y = top + playerSize.height / 2
                     velocity.dy = jumpSpeed
+
+                    if score >= 500 {
+                        let cameraKick: CGFloat
+                        switch score {
+                        case 2500...: cameraKick = 7
+                        case 1800...: cameraKick = 6
+                        case 1200...: cameraKick = 5
+                        case 800...: cameraKick = 4
+                        default: cameraKick = 3
+                        }
+                        player.position.y -= cameraKick
+                        platforms.forEach { $0.node.position.y -= cameraKick }
+                        climbed += cameraKick
+                        score = max(score, Int(climbed / 10))
+                    }
                     break
                 }
             }
@@ -300,7 +473,7 @@ private final class UpUpScene: SKScene {
 
         var top = platforms.map(\.node.position.y).max() ?? 0
         while top < size.height + 180 {
-            top += CGFloat(Int.random(in: 88...126))
+            top += CGFloat(Int.random(in: 100...138))
             addPlatform(y: top)
         }
 
@@ -316,25 +489,64 @@ private final class UpUpScene: SKScene {
             bestScore = score
             UserDefaults.standard.set(score, forKey: "upup_best_score")
         }
+
+        let finalScore = score
+        Task {
+            try? await MiniGameRankingService.submitScore(
+                gameKey: "upup",
+                score: finalScore,
+                countAttempt: true
+            )
+            await MainActor.run {
+                NotificationCenter.default.post(name: .upUpScoreUpdated, object: nil)
+            }
+        }
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
+        guard let point = touches.first?.location(in: self) else { return }
+        let hitNames = Set(nodes(at: point).compactMap(\.name))
+
+        if paused {
+            if hitNames.contains("pause_resume") {
+                paused = false
+                lastUpdateTime = 0
+            } else if hitNames.contains("pause_restart") {
+                reset(autoStart: true)
+            } else if hitNames.contains("pause_exit") {
+                NotificationCenter.default.post(name: .upUpExitRequested, object: nil)
+            }
+            return
+        }
 
         if gameOver {
-            reset(autoStart: true)
-        } else if !started {
+            if hitNames.contains("gameover_retry") {
+                reset(autoStart: true)
+            } else if hitNames.contains("gameover_exit") {
+                NotificationCenter.default.post(name: .upUpExitRequested, object: nil)
+            }
+            return
+        }
+
+        if hitNames.contains("pause_button"), started {
+            paused = true
+            horizontalDirection = 0
+            return
+        }
+
+        if !started {
             started = true
             velocity.dy = jumpSpeed
             lastUpdateTime = 0
+            return
         }
 
-        let point = touch.location(in: self)
         horizontalDirection = point.x < size.width / 2 ? -1 : 1
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let point = touches.first?.location(in: self) else { return }
+        guard started, !gameOver, !paused,
+              let point = touches.first?.location(in: self) else { return }
         horizontalDirection = point.x < size.width / 2 ? -1 : 1
     }
 
@@ -353,6 +565,25 @@ private final class UpUpScene: SKScene {
         hud.name = "hud"
         hud.zPosition = 100
 
+        addHudLabels(to: hud)
+
+        if started && !gameOver {
+            addPauseButton(to: hud)
+        }
+        if !started && !gameOver {
+            addStartPanel(to: hud)
+        }
+        if paused {
+            addPausePanel(to: hud)
+        }
+        if gameOver {
+            addGameOverPanel(to: hud)
+        }
+
+        addChild(hud)
+    }
+
+    private func addHudLabels(to hud: SKNode) {
         let scoreLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
         scoreLabel.text = "\(score)점"
         scoreLabel.fontSize = 21
@@ -368,39 +599,125 @@ private final class UpUpScene: SKScene {
         bestLabel.horizontalAlignmentMode = .left
         bestLabel.position = CGPoint(x: 18, y: size.height - 62)
         hud.addChild(bestLabel)
+    }
 
-        if !started || gameOver {
-            let panel = SKShapeNode(
-                rectOf: CGSize(width: min(330, size.width - 56), height: gameOver ? 260 : 245),
-                cornerRadius: 24
-            )
-            panel.fillColor = SKColor.white.withAlphaComponent(0.92)
-            panel.strokeColor = .clear
-            panel.position = CGPoint(x: size.width / 2, y: size.height * 0.55)
-            hud.addChild(panel)
+    private func addPauseButton(to hud: SKNode) {
+        let button = SKShapeNode(rectOf: CGSize(width: 54, height: 54), cornerRadius: 17)
+        button.name = "pause_button"
+        button.fillColor = SKColor.white.withAlphaComponent(0.94)
+        button.strokeColor = SKColor(red: 0.55, green: 0.62, blue: 0.66, alpha: 1)
+        button.lineWidth = 1.5
+        button.position = CGPoint(x: size.width - 45, y: size.height - 44)
+        hud.addChild(button)
 
-            let title = SKLabelNode(fontNamed: "Arial-BoldMT")
-            title.text = gameOver ? "게임 오버" : "올라올라"
-            title.fontSize = 30
-            title.fontColor = SKColor(red: 23/255, green: 37/255, blue: 46/255, alpha: 1)
-            title.position = CGPoint(x: size.width / 2, y: size.height * 0.60)
-            hud.addChild(title)
-
-            let detail = SKLabelNode(fontNamed: "Arial-BoldMT")
-            detail.text = gameOver ? "\(score)점 · 최고 \(bestScore)점" : "왼쪽/오른쪽을 눌러 이동"
-            detail.fontSize = 15
-            detail.fontColor = SKColor(red: 71/255, green: 85/255, blue: 105/255, alpha: 1)
-            detail.position = CGPoint(x: size.width / 2, y: size.height * 0.54)
-            hud.addChild(detail)
-
-            let action = SKLabelNode(fontNamed: "Arial-BoldMT")
-            action.text = gameOver ? "화면을 눌러 다시 시작" : "화면을 눌러 시작"
-            action.fontSize = 16
-            action.fontColor = SKColor(red: 122/255, green: 90/255, blue: 0, alpha: 1)
-            action.position = CGPoint(x: size.width / 2, y: size.height * 0.48)
-            hud.addChild(action)
+        for offset: CGFloat in [-7, 7] {
+            let bar = SKShapeNode(rectOf: CGSize(width: 5, height: 24), cornerRadius: 2)
+            bar.name = "pause_button"
+            bar.fillColor = SKColor(red: 23/255, green: 37/255, blue: 46/255, alpha: 1)
+            bar.strokeColor = .clear
+            bar.position = CGPoint(x: offset, y: 0)
+            button.addChild(bar)
         }
+    }
 
-        addChild(hud)
+    private func addStartPanel(to hud: SKNode) {
+        let panel = panelNode(height: 245)
+        panel.position = CGPoint(x: size.width / 2, y: size.height * 0.55)
+        hud.addChild(panel)
+
+        addLabel("올라올라", size: 30, y: 52, to: panel)
+        addLabel("화면을 누를 때마다 좌우 방향이 바뀌어요.", size: 14, y: 5, to: panel,
+                 color: SKColor(red: 71/255, green: 85/255, blue: 105/255, alpha: 1))
+        addLabel("화면을 눌러 시작", size: 16, y: -54, to: panel,
+                 color: SKColor(red: 122/255, green: 90/255, blue: 0, alpha: 1))
+    }
+
+    private func addPausePanel(to hud: SKNode) {
+        let dim = SKShapeNode(rectOf: size)
+        dim.fillColor = SKColor.black.withAlphaComponent(0.52)
+        dim.strokeColor = .clear
+        dim.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        hud.addChild(dim)
+
+        let panel = panelNode(height: 360)
+        panel.position = CGPoint(x: size.width / 2, y: size.height * 0.52)
+        hud.addChild(panel)
+        addLabel("일시정지", size: 30, y: 128, to: panel)
+
+        addMenuButton("▶  계속하기", name: "pause_resume", y: 55, yellow: true, to: panel)
+        addMenuButton("↻  처음부터 다시하기", name: "pause_restart", y: -12, to: panel)
+        addMenuButton("⌂  미니게임으로 나가기", name: "pause_exit", y: -79, danger: true, to: panel)
+    }
+
+    private func addGameOverPanel(to hud: SKNode) {
+        let dim = SKShapeNode(rectOf: size)
+        dim.fillColor = SKColor.black.withAlphaComponent(0.52)
+        dim.strokeColor = .clear
+        dim.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        hud.addChild(dim)
+
+        let panel = panelNode(height: 330)
+        panel.position = CGPoint(x: size.width / 2, y: size.height * 0.52)
+        hud.addChild(panel)
+        addLabel("게임 오버", size: 30, y: 112, to: panel)
+        addLabel("\(score)점", size: 26, y: 70, to: panel)
+        addLabel("최고 기록 \(bestScore)점", size: 14, y: 38, to: panel,
+                 color: SKColor(red: 71/255, green: 85/255, blue: 105/255, alpha: 1))
+
+        addMenuButton("↻  다시하기", name: "gameover_retry", y: -28, yellow: true, to: panel)
+        addMenuButton("⌂  미니게임으로 나가기", name: "gameover_exit", y: -95, danger: true, to: panel)
+    }
+
+    private func panelNode(height: CGFloat) -> SKShapeNode {
+        let panel = SKShapeNode(
+            rectOf: CGSize(width: min(330, size.width - 56), height: height),
+            cornerRadius: 24
+        )
+        panel.fillColor = SKColor(red: 1, green: 0.99, blue: 0.965, alpha: 0.98)
+        panel.strokeColor = .clear
+        return panel
+    }
+
+    private func addMenuButton(
+        _ text: String,
+        name: String,
+        y: CGFloat,
+        yellow: Bool = false,
+        danger: Bool = false,
+        to panel: SKNode
+    ) {
+        let button = SKShapeNode(rectOf: CGSize(width: min(278, size.width - 100), height: 50), cornerRadius: 15)
+        button.name = name
+        button.fillColor = yellow
+            ? SKColor(red: 1, green: 0.77, blue: 0, alpha: 1)
+            : (danger ? SKColor(red: 1, green: 0.96, blue: 0.96, alpha: 1) : .white)
+        button.strokeColor = SKColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1)
+        button.lineWidth = 1
+        button.position = CGPoint(x: 0, y: y)
+        panel.addChild(button)
+
+        let label = SKLabelNode(fontNamed: "Arial-BoldMT")
+        label.name = name
+        label.text = text
+        label.fontSize = 16
+        label.fontColor = SKColor(red: 23/255, green: 37/255, blue: 46/255, alpha: 1)
+        label.verticalAlignmentMode = .center
+        button.addChild(label)
+    }
+
+    private func addLabel(
+        _ text: String,
+        size: CGFloat,
+        y: CGFloat,
+        to panel: SKNode,
+        color: SKColor = SKColor(red: 23/255, green: 37/255, blue: 46/255, alpha: 1)
+    ) {
+        let label = SKLabelNode(fontNamed: "Arial-BoldMT")
+        label.text = text
+        label.fontSize = size
+        label.fontColor = color
+        label.verticalAlignmentMode = .center
+        label.position = CGPoint(x: 0, y: y)
+        panel.addChild(label)
     }
 }
