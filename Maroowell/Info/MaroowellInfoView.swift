@@ -371,6 +371,7 @@ struct MaroowellUniformSizeView: View {
     private let sizes = ["S", "M", "L", "XL", "2XL", "3XL", "4XL"]
 
     @State private var personName = ""
+    @State private var positionTitle = ""
     @State private var selectedVestSizes: Set<String> = []
     @State private var selectedFleeceSizes: Set<String> = []
     @State private var isTwoPersonTeam = false
@@ -440,7 +441,7 @@ struct MaroowellUniformSizeView: View {
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !personName.isEmpty {
-                Text(personName)
+                Text(positionTitle.isEmpty ? personName : "\(personName) \(positionTitle)님")
                     .font(.title3.weight(.black))
                     .foregroundStyle(MaroowellTheme.ink)
             }
@@ -535,6 +536,7 @@ struct MaroowellUniformSizeView: View {
         do {
             let row = try await request("mw_my_uniform_sizes", body: [:])
             personName = row.personName ?? ""
+            positionTitle = row.positionTitle ?? ""
             isTwoPersonTeam = row.isTwoPersonTeam
             selectedVestSizes = parse(row.summerVestSize)
             selectedFleeceSizes = parse(row.winterFleeceSize)
@@ -563,6 +565,7 @@ struct MaroowellUniformSizeView: View {
                 ]
             )
             personName = row.personName ?? personName
+            positionTitle = row.positionTitle ?? positionTitle
             isTwoPersonTeam = row.isTwoPersonTeam
             selectedVestSizes = parse(row.summerVestSize)
             selectedFleeceSizes = parse(row.winterFleeceSize)
@@ -609,12 +612,14 @@ struct MaroowellUniformSizeView: View {
 
     private struct UniformSizeRow: Decodable {
         let personName: String?
+        let positionTitle: String?
         let summerVestSize: String?
         let winterFleeceSize: String?
         let isTwoPersonTeam: Bool
 
         enum CodingKeys: String, CodingKey {
             case personName = "person_name"
+            case positionTitle = "position_title"
             case summerVestSize = "summer_vest_size"
             case winterFleeceSize = "winter_fleece_size"
             case isTwoPersonTeam = "is_two_person_team"
