@@ -134,8 +134,16 @@ struct HomeView: View {
             NavigationLink { MetaRealtimeShareView() } label: { HomeMenuRow(item: item, badge: "팀장") }
                 .buttonStyle(.plain)
         case .maroowellInfo:
-            NavigationLink { MaroowellInfoView() } label: { HomeMenuRow(item: item, badge: "관리자") }
-                .buttonStyle(.plain)
+            NavigationLink {
+                if session.isManager {
+                    MaroowellInfoView()
+                } else {
+                    MaroowellUniformSizeView()
+                }
+            } label: {
+                HomeMenuRow(item: item, badge: session.isManager ? "관리자" : nil)
+            }
+            .buttonStyle(.plain)
         case .campLookup:
             NavigationLink { CampLookupView(session: session) } label: { HomeMenuRow(item: item, badge: "팀장") }
                 .buttonStyle(.plain)
@@ -396,8 +404,14 @@ struct HomeView: View {
         if session.canView("/maroowell_account") {
             items.append(.init(tab: .status, title: "통계조회", subtitle: "배송·반품 통계 조회", symbol: "chart.bar.xaxis", destination: .accountStats))
         }
-        if session.canView("/maroowell_info") {
-            items.append(.init(tab: .more, title: "마루웰 정보", subtitle: "인원 기본정보 조회 · 수정 · 추가", symbol: "building.2.fill", destination: .maroowellInfo))
+        if session.isMaroowell {
+            items.append(.init(
+                tab: .more,
+                title: "마루웰 정보",
+                subtitle: session.isManager ? "인원 기본정보 조회 · 수정 · 추가" : "내 조끼 · 후리스 사이즈 확인 및 수정",
+                symbol: "building.2.fill",
+                destination: .maroowellInfo
+            ))
         }
 
         let webItems: [(HomeTab, String, String, String, String)] = [
