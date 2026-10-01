@@ -74,9 +74,8 @@ struct RootView: View {
             guard phase == .active else { return }
             Task {
                 await checkRequiredVersion()
-                if case .allowed = versionGate, let session = sessionViewModel.session {
+                if case .allowed = versionGate, sessionViewModel.session != nil {
                     await PushManager.shared.resyncCurrentDevice()
-                    await popupNoticeCenter.refresh(userID: session.userID, force: true)
                 }
             }
         }
