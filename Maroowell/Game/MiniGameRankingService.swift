@@ -79,9 +79,31 @@ enum MiniGameRankingService {
             pScore: max(0, score),
             pCountAttempt: countAttempt
         )
-        _ = try await client
-            .rpc("app_submit_minigame_score", params: params)
-            .execute()
+        let session = try await client.auth.session
+        let endpoint = AppConfig.supabaseURL
+            .appendingPathComponent("rest/v1/rpc/app_submit_minigame_score")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.setValue(AppConfig.supabasePublishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        if let appCheckToken = await AppIntegrity.token() {
+            request.setValue(appCheckToken, forHTTPHeaderField: "X-Firebase-AppCheck")
+        }
+        request.httpBody = try JSONEncoder().encode(params)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(status) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(
+                domain: "MiniGameScore",
+                code: status,
+                userInfo: [NSLocalizedDescriptionKey: "점수 등록 실패 (\(status)): \(body.prefix(160))"]
+            )
+        }
     }
 
     static func loadLeaderboard(

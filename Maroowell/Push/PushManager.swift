@@ -1,3 +1,4 @@
+import FirebaseAppCheck
 import FirebaseCore
 import FirebaseMessaging
 import Foundation
@@ -5,12 +6,26 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
+final class MaroowellAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
+    func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
+        AppAttestProvider(app: app)
+    }
+}
+
+enum AppIntegrity {
+    static func token(forceRefresh: Bool = false) async -> String? {
+        guard FirebaseApp.app() != nil else { return nil }
+        return try? await AppCheck.appCheck().token(forcingRefresh: forceRefresh).token
+    }
+}
+
 final class MaroowellAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         if FirebaseApp.app() == nil {
+            AppCheck.setAppCheckProviderFactory(MaroowellAppCheckProviderFactory())
             FirebaseApp.configure()
         }
         UNUserNotificationCenter.current().delegate = self
