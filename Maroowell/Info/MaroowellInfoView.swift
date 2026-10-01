@@ -368,42 +368,33 @@ private struct MaroowellInfoEditor: View {
 }
 
 struct MaroowellUniformSizeView: View {
+    private let sizes = ["S", "M", "L", "XL", "2XL", "3XL", "4XL"]
+
     @State private var personName = ""
-    @State private var summerVestSize = ""
-    @State private var winterFleeceSize = ""
+    @State private var selectedVestSizes: Set<String> = []
+    @State private var selectedFleeceSizes: Set<String> = []
+    @State private var isTwoPersonTeam = false
     @State private var isLoading = false
     @State private var isSaving = false
     @State private var message: String?
 
     var body: some View {
-        Form {
-            Section {
-                if !personName.isEmpty {
-                    LabeledContent("이름", value: personName)
-                }
-                HStack {
-                    Text("조끼 (하계용)")
-                    Spacer(minLength: 12)
-                    TextField("예: L / XL / 100", text: $summerVestSize)
-                        .multilineTextAlignment(.trailing)
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                }
-                HStack {
-                    Text("후리스 (동계용)")
-                    Spacer(minLength: 12)
-                    TextField("예: L / XL / 100", text: $winterFleeceSize)
-                        .multilineTextAlignment(.trailing)
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                }
-            } header: {
-                Text("지급품 사이즈")
-            } footer: {
-                Text("기사 본인은 조끼와 후리스 사이즈만 조회·수정할 수 있습니다.")
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                headerCard
 
-            Section {
+                sizeCard(
+                    title: "조끼 (하계용)",
+                    subtitle: "하계 조끼 사이즈를 선택하세요.",
+                    selection: $selectedVestSizes
+                )
+
+                sizeCard(
+                    title: "후리스 (동계용)",
+                    subtitle: "동계 후리스 사이즈를 선택하세요.",
+                    selection: $selectedFleeceSizes
+                )
+
                 Button {
                     Task { await save() }
                 } label: {
@@ -411,22 +402,29 @@ struct MaroowellUniformSizeView: View {
                         Spacer()
                         if isSaving { ProgressView().controlSize(.small) }
                         Text(isSaving ? "저장 중..." : "사이즈 저장")
-                            .fontWeight(.black)
+                            .font(.headline.weight(.black))
                         Spacer()
                     }
+                    .frame(height: 52)
                 }
-                .disabled(isSaving || summerVestSize.count > 30 || winterFleeceSize.count > 30)
-            }
+                .buttonStyle(.borderedProminent)
+                .tint(MaroowellTheme.yellow)
+                .foregroundStyle(MaroowellTheme.ink)
+                .disabled(isSaving)
 
-            if let message {
-                Section {
+                if let message {
                     Text(message)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(message.contains("완료") ? Color.green : Color.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
                 }
             }
+            .padding(16)
         }
-        .navigationTitle("마루웰 정보")
+        .background(MaroowellTheme.background)
+        .navigationTitle("지급품 사이즈")
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
             if isLoading {
@@ -439,6 +437,96 @@ struct MaroowellUniformSizeView: View {
         .refreshable { await load() }
     }
 
+    private var headerCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !personName.isEmpty {
+                Text(personName)
+                    .font(.title3.weight(.black))
+                    .foregroundStyle(MaroowellTheme.ink)
+            }
+            Label(
+                isTwoPersonTeam ? "2인 1조 · 품목별 최대 2개 선택" : "1인 운영 · 품목별 1개 선택",
+                systemImage: isTwoPersonTeam ? "person.2.fill" : "person.fill"
+            )
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(.blue)
+
+            Text("저장된 사이즈는 주문용 정보로 계속 유지됩니다. 변경이 필요한 경우에만 다시 선택해 저장하세요.")
+                .font(.caption)
+                .foregroundStyle(MaroowellTheme.muted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
+        .overlay { RoundedRectangle(cornerRadius: 18).stroke(MaroowellTheme.border) }
+    }
+
+    private func sizeCard(
+        title: String,
+        subtitle: String,
+        selection: Binding<Set<String>>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline.weight(.black))
+                .foregroundStyle(MaroowellTheme.ink)
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(MaroowellTheme.muted)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                ForEach(sizes, id: \.self) { size in
+                    let selected = selection.wrappedValue.contains(size)
+                    Button {
+                        toggle(size, in: selection)
+                    } label: {
+                        Text(size)
+                            .font(.subheadline.weight(.black))
+                            .foregroundStyle(selected ? MaroowellTheme.ink : MaroowellTheme.muted)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(
+                                selected ? MaroowellTheme.yellow : Color.white,
+                                in: RoundedRectangle(cornerRadius: 12)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(selected ? MaroowellTheme.deepYellow : MaroowellTheme.border)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Text(selection.wrappedValue.isEmpty
+                 ? "선택된 사이즈 없음"
+                 : "선택: " + sizes.filter(selection.wrappedValue.contains).joined(separator: ", "))
+                .font(.caption.weight(.bold))
+                .foregroundStyle(MaroowellTheme.muted)
+        }
+        .padding(16)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
+        .overlay { RoundedRectangle(cornerRadius: 18).stroke(MaroowellTheme.border) }
+    }
+
+    private func toggle(_ size: String, in selection: Binding<Set<String>>) {
+        var next = selection.wrappedValue
+        if next.contains(size) {
+            next.remove(size)
+        } else {
+            let maxCount = isTwoPersonTeam ? 2 : 1
+            guard next.count < maxCount else {
+                message = isTwoPersonTeam
+                    ? "2인 1조는 품목별 최대 2개까지 선택할 수 있습니다."
+                    : "1인 운영은 품목별 1개만 선택할 수 있습니다."
+                return
+            }
+            next.insert(size)
+        }
+        selection.wrappedValue = next
+        message = nil
+    }
+
     @MainActor
     private func load() async {
         isLoading = true
@@ -447,8 +535,9 @@ struct MaroowellUniformSizeView: View {
         do {
             let row = try await request("mw_my_uniform_sizes", body: [:])
             personName = row.personName ?? ""
-            summerVestSize = row.summerVestSize ?? ""
-            winterFleeceSize = row.winterFleeceSize ?? ""
+            isTwoPersonTeam = row.isTwoPersonTeam
+            selectedVestSizes = parse(row.summerVestSize)
+            selectedFleeceSizes = parse(row.winterFleeceSize)
         } catch {
             message = error.localizedDescription
         }
@@ -456,10 +545,12 @@ struct MaroowellUniformSizeView: View {
 
     @MainActor
     private func save() async {
-        if summerVestSize.count > 30 || winterFleeceSize.count > 30 {
-            message = "사이즈는 30자 이하로 입력해주세요."
+        let maxCount = isTwoPersonTeam ? 2 : 1
+        guard selectedVestSizes.count <= maxCount, selectedFleeceSizes.count <= maxCount else {
+            message = isTwoPersonTeam ? "품목별 최대 2개까지 선택할 수 있습니다." : "품목별 1개만 선택할 수 있습니다."
             return
         }
+
         isSaving = true
         message = nil
         defer { isSaving = false }
@@ -467,17 +558,25 @@ struct MaroowellUniformSizeView: View {
             let row = try await request(
                 "mw_update_my_uniform_sizes",
                 body: [
-                    "p_summer_vest_size": summerVestSize,
-                    "p_winter_fleece_size": winterFleeceSize
+                    "p_summer_vest_size": sizes.filter(selectedVestSizes.contains).joined(separator: ","),
+                    "p_winter_fleece_size": sizes.filter(selectedFleeceSizes.contains).joined(separator: ",")
                 ]
             )
             personName = row.personName ?? personName
-            summerVestSize = row.summerVestSize ?? ""
-            winterFleeceSize = row.winterFleeceSize ?? ""
+            isTwoPersonTeam = row.isTwoPersonTeam
+            selectedVestSizes = parse(row.summerVestSize)
+            selectedFleeceSizes = parse(row.winterFleeceSize)
             message = "저장 완료"
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private func parse(_ raw: String?) -> Set<String> {
+        Set((raw ?? "")
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+            .filter { sizes.contains($0) })
     }
 
     private func request(_ rpc: String, body: [String: String]) async throws -> UniformSizeRow {
@@ -512,11 +611,13 @@ struct MaroowellUniformSizeView: View {
         let personName: String?
         let summerVestSize: String?
         let winterFleeceSize: String?
+        let isTwoPersonTeam: Bool
 
         enum CodingKeys: String, CodingKey {
             case personName = "person_name"
             case summerVestSize = "summer_vest_size"
             case winterFleeceSize = "winter_fleece_size"
+            case isTwoPersonTeam = "is_two_person_team"
         }
     }
 
