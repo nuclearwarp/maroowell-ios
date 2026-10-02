@@ -187,7 +187,7 @@ struct HomeView: View {
                     .font(MaroowellBrandFont.font(size: 17))
                     .tracking(1.35)
                     .foregroundStyle(Color(red: 1.0, green: 0.77, blue: 0.0))
-                Text("v1.6.0")
+                Text("v1.6.1")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(MaroowellTheme.muted)
                     .padding(.horizontal, 6)
