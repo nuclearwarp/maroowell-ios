@@ -5,6 +5,7 @@ struct MiniGameConfig: Decodable, Identifiable {
     let gameKey: String
     let displayName: String
     let seasonKey: String
+    let seasonNo: Int
     let sortOrder: Int
 
     var id: String { gameKey }
@@ -13,6 +14,7 @@ struct MiniGameConfig: Decodable, Identifiable {
         case gameKey = "game_key"
         case displayName = "display_name"
         case seasonKey = "season_key"
+        case seasonNo = "season_no"
         case sortOrder = "sort_order"
     }
 }
@@ -44,6 +46,10 @@ struct MiniGameLeaderboardSnapshot {
     let currentUserID: UUID?
 }
 
+private struct MiniGameScoreResult: Decodable {
+    let score: Int
+}
+
 private struct MiniGameScoreParams: Encodable {
     let pGameKey: String
     let pScore: Int
@@ -62,7 +68,7 @@ enum MiniGameRankingService {
     static func loadActiveGames() async throws -> [MiniGameConfig] {
         try await client
             .from("app_minigame_games")
-            .select("game_key,display_name,season_key,sort_order")
+            .select("game_key,display_name,season_key,season_no,sort_order")
             .eq("is_active", value: true)
             .order("sort_order", ascending: true)
             .order("game_key", ascending: true)
@@ -73,7 +79,7 @@ enum MiniGameRankingService {
         gameKey: String,
         score: Int,
         countAttempt: Bool
-    ) async throws {
+    ) async throws -> Int {
         let params = MiniGameScoreParams(
             pGameKey: gameKey,
             pScore: max(0, score),
@@ -106,6 +112,8 @@ enum MiniGameRankingService {
                 userInfo: [NSLocalizedDescriptionKey: "점수 등록 실패 (\(status)): \(body.prefix(160))"]
             )
         }
+        let rows = try JSONDecoder().decode([MiniGameScoreResult].self, from: data)
+        return rows.first?.score ?? max(0, score)
     }
 
     private static func verifyIntegritySession(accessToken: String) async throws {
