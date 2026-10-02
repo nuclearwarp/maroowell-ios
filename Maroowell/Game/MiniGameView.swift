@@ -8,7 +8,6 @@ extension Notification.Name {
 }
 
 struct MiniGameHubView: View {
-    @AppStorage("upup_best_score") private var bestScore = 0
     @StateObject private var model = MiniGameHubModel()
 
     var body: some View {
@@ -50,7 +49,7 @@ struct MiniGameHubView: View {
 
     @ViewBuilder
     private func gameCard(_ game: MiniGameConfig) -> some View {
-        NavigationLink { UpUpGameView() } label: {
+        NavigationLink { UpUpGameView(initialBest: model.leaderboard.myScore ?? 0) } label: {
             VStack(spacing: 10) {
                 upUpCover
                     .frame(width: 112, height: 112)
@@ -64,7 +63,7 @@ struct MiniGameHubView: View {
                     .foregroundStyle(MaroowellTheme.muted)
                     .multilineTextAlignment(.center)
 
-                Text("내 기기 최고 기록  \(bestScore)점")
+                Text("내 계정 최고 기록  \(model.leaderboard.myScore ?? 0)점")
                     .font(.subheadline.weight(.black))
                     .foregroundStyle(MaroowellTheme.deepYellow)
 
@@ -84,12 +83,9 @@ struct MiniGameHubView: View {
 
     private var upUpCover: some View {
         Group {
-            if let url = Bundle.main.url(forResource: "game_upup_cover", withExtension: "webp"),
-               let image = UIImage(contentsOfFile: url.path) {
-                Image(uiImage: image).resizable().scaledToFit()
-            } else {
-                Image("menu_numbering_rangkong").resizable().scaledToFit()
-            }
+            Image("menu_minigame_v161")
+                .resizable()
+                .scaledToFit()
         }
     }
 
@@ -108,7 +104,7 @@ struct MiniGameHubView: View {
                     .font(.headline.weight(.black))
             }
 
-            Text("\(game.seasonKey) 시즌 · 전체 1~10위 · 계정별 최고점 1개")
+            Text("시즌 \(game.seasonNo) · 전체 1~10위 · 계정별 최고점 1개")
                 .font(.caption)
                 .foregroundStyle(MaroowellTheme.muted)
 
@@ -173,7 +169,11 @@ struct MiniGameHubView: View {
 
 struct UpUpGameView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var scene = UpUpScene()
+    @State private var scene: UpUpScene
+
+    init(initialBest: Int) {
+        _scene = State(initialValue: UpUpScene(initialBest: initialBest))
+    }
 
     var body: some View {
         SpriteView(scene: scene)
@@ -201,12 +201,11 @@ private final class TotePlatform {
 
 private final class UpUpScene: SKScene {
     private let player: SKSpriteNode = {
-        let full = SKTexture(imageNamed: "menu_numbering_rangkong")
-        let cropped = SKTexture(
-            rect: CGRect(x: 0, y: 0.10, width: 1, height: 0.90),
-            in: full
-        )
-        return SKSpriteNode(texture: cropped)
+        if let url = Bundle.main.url(forResource: "game_upup_player", withExtension: "webp"),
+           let image = UIImage(contentsOfFile: url.path) {
+            return SKSpriteNode(texture: SKTexture(image: image))
+        }
+        return SKSpriteNode(texture: SKTexture(imageNamed: "menu_numbering_rangkong"))
     }()
     private var platforms: [TotePlatform] = []
     private var horizontalDirection: CGFloat = 0
@@ -214,7 +213,7 @@ private final class UpUpScene: SKScene {
     private var lastUpdateTime: TimeInterval = 0
     private var climbed: CGFloat = 0
     private var score = 0
-    private var bestScore = UserDefaults.standard.integer(forKey: "upup_best_score")
+    private var bestScore = 0
     private var started = false
     private var gameOver = false
     private var gamePaused = false
@@ -232,6 +231,11 @@ private final class UpUpScene: SKScene {
 
     override convenience init() {
         self.init(size: CGSize(width: 390, height: 844))
+    }
+
+    convenience init(initialBest: Int) {
+        self.init(size: CGSize(width: 390, height: 844))
+        bestScore = max(0, initialBest)
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -252,7 +256,7 @@ private final class UpUpScene: SKScene {
         platforms.removeAll()
         climbed = 0
         score = 0
-        horizontalDirection = 0
+        horizontalDirection = autoStart ? 1 : 0
         velocity = .zero
         lastUpdateTime = 0
         started = autoStart
@@ -485,20 +489,28 @@ private final class UpUpScene: SKScene {
     private func finishGame() {
         gameOver = true
         horizontalDirection = 0
-        if score > bestScore {
-            bestScore = score
-            UserDefaults.standard.set(score, forKey: "upup_best_score")
-        }
+        bestScore = max(bestScore, score)
 
         let finalScore = score
         Task {
-            try? await MiniGameRankingService.submitScore(
-                gameKey: "upup",
-                score: finalScore,
-                countAttempt: true
-            )
-            await MainActor.run {
-                NotificationCenter.default.post(name: .upUpScoreUpdated, object: nil)
+            do {
+                let serverBest = try await MiniGameRankingService.submitScore(
+                    gameKey: "upup",
+                    score: finalScore,
+                    countAttempt: true
+                )
+                await MainActor.run {
+                    self.bestScore = max(self.bestScore, serverBest)
+                    NotificationCenter.default.post(name: .upUpScoreUpdated, object: nil)
+                }
+            } catch {
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: .upUpScoreUpdated,
+                        object: nil,
+                        userInfo: ["error": error.localizedDescription]
+                    )
+                }
             }
         }
     }
@@ -536,26 +548,13 @@ private final class UpUpScene: SKScene {
 
         if !started {
             started = true
+            horizontalDirection = 1
             velocity.dy = jumpSpeed
             lastUpdateTime = 0
             return
         }
 
-        horizontalDirection = point.x < size.width / 2 ? -1 : 1
-    }
-
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard started, !gameOver, !gamePaused,
-              let point = touches.first?.location(in: self) else { return }
-        horizontalDirection = point.x < size.width / 2 ? -1 : 1
-    }
-
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        horizontalDirection = 0
-    }
-
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        horizontalDirection = 0
+        horizontalDirection = horizontalDirection >= 0 ? -1 : 1
     }
 
     override func didFinishUpdate() {
