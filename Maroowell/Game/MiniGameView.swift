@@ -60,7 +60,7 @@ struct MiniGameHubView: View {
                 upUpCover
                     .frame(width: 112, height: 112)
 
-                Text("시즌 \(game.seasonNo) \(game.displayName)")
+                Text("시즌\(game.seasonNo) \(game.displayName)")
                     .font(.title2.weight(.black))
                     .foregroundStyle(MaroowellTheme.ink)
 
@@ -96,7 +96,7 @@ struct MiniGameHubView: View {
     @ViewBuilder
     private func rankingCard(_ game: MiniGameConfig) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("올라올라 시즌 \(game.seasonNo) 랭킹")
+            Text("올라올라 시즌\(game.seasonNo) 랭킹")
                 .font(.title3.weight(.black))
                 .foregroundStyle(MaroowellTheme.ink)
 
@@ -113,14 +113,14 @@ struct MiniGameHubView: View {
                 .foregroundStyle(MaroowellTheme.muted)
 
             Button {
-                Task { await model.refresh() }
+                Task { await model.refreshLeaderboard() }
             } label: {
                 HStack(spacing: 8) {
-                    if model.isLoading {
+                    if model.isRefreshingRanking {
                         ProgressView()
                             .controlSize(.small)
                     }
-                    Text(model.isLoading ? "랭킹 새로고침 중..." : "랭킹 새로고침")
+                    Text(model.isRefreshingRanking ? "랭킹 새로고침 중..." : "랭킹 새로고침")
                 }
                 .font(.subheadline.weight(.bold))
                 .frame(maxWidth: .infinity)
@@ -128,7 +128,7 @@ struct MiniGameHubView: View {
                 .background(MaroowellTheme.background, in: RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
-            .disabled(model.isLoading)
+            .disabled(model.isRefreshingRanking)
 
             if let error = model.errorMessage, !error.isEmpty {
                 Text(error)

@@ -224,6 +224,7 @@ final class MiniGameHubModel: ObservableObject {
         currentUserID: nil
     )
     @Published var isLoading = false
+    @Published var isRefreshingRanking = false
     @Published var errorMessage: String?
 
     func refresh() async {
@@ -246,10 +247,25 @@ final class MiniGameHubModel: ObservableObject {
             }
 
             activeGame = upup
-
             leaderboard = try await MiniGameRankingService.loadLeaderboard(
                 gameKey: upup.gameKey,
                 seasonKey: upup.seasonKey
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func refreshLeaderboard() async {
+        guard let game = activeGame, !isRefreshingRanking else { return }
+        isRefreshingRanking = true
+        errorMessage = nil
+        defer { isRefreshingRanking = false }
+
+        do {
+            leaderboard = try await MiniGameRankingService.loadLeaderboard(
+                gameKey: game.gameKey,
+                seasonKey: game.seasonKey
             )
         } catch {
             errorMessage = error.localizedDescription

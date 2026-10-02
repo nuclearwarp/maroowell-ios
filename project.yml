@@ -24,7 +24,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.maroowell.app
         PRODUCT_NAME: Maroowell
         MARKETING_VERSION: 1.6.1
-        CURRENT_PROJECT_VERSION: 84
+        CURRENT_PROJECT_VERSION: 85
         SWIFT_VERSION: 5.0
         INFOPLIST_FILE: Maroowell/Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
