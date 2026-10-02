@@ -50,12 +50,17 @@ struct MiniGameHubView: View {
 
     @ViewBuilder
     private func gameCard(_ game: MiniGameConfig) -> some View {
-        NavigationLink { UpUpGameView(initialBestScore: model.leaderboard.myScore ?? 0) } label: {
+        NavigationLink {
+            UpUpGameView(
+                initialBestScore: model.leaderboard.myScore ?? 0,
+                topScore: model.leaderboard.topScore ?? 0
+            )
+        } label: {
             VStack(spacing: 10) {
                 upUpCover
                     .frame(width: 112, height: 112)
 
-                Text(game.displayName)
+                Text("시즌 \(game.seasonNo) \(game.displayName)")
                     .font(.title2.weight(.black))
                     .foregroundStyle(MaroowellTheme.ink)
 
@@ -91,7 +96,7 @@ struct MiniGameHubView: View {
     @ViewBuilder
     private func rankingCard(_ game: MiniGameConfig) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("올라올라 랭킹")
+            Text("올라올라 시즌 \(game.seasonNo) 랭킹")
                 .font(.title3.weight(.black))
                 .foregroundStyle(MaroowellTheme.ink)
 
@@ -103,9 +108,33 @@ struct MiniGameHubView: View {
                     .font(.headline.weight(.black))
             }
 
-            Text("\(game.seasonKey) 시즌 · 전체 1~10위 · 계정별 최고점 1개")
+            Text("시즌 \(game.seasonNo) · 전체 1~10위 · 계정별 최고점 1개")
                 .font(.caption)
                 .foregroundStyle(MaroowellTheme.muted)
+
+            Button {
+                Task { await model.refresh() }
+            } label: {
+                HStack(spacing: 8) {
+                    if model.isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Text(model.isLoading ? "랭킹 새로고침 중..." : "랭킹 새로고침")
+                }
+                .font(.subheadline.weight(.bold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(MaroowellTheme.background, in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .disabled(model.isLoading)
+
+            if let error = model.errorMessage, !error.isEmpty {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
 
             if model.leaderboard.rows.isEmpty {
                 Text("첫 번째 기록에 도전해보세요.")
@@ -117,15 +146,6 @@ struct MiniGameHubView: View {
                     rankRow(row)
                 }
             }
-
-            Button("랭킹 새로고침") {
-                Task { await model.refresh() }
-            }
-            .font(.subheadline.weight(.bold))
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .background(MaroowellTheme.background, in: RoundedRectangle(cornerRadius: 12))
-            .buttonStyle(.plain)
         }
         .padding(16)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 22))
@@ -171,8 +191,13 @@ struct UpUpGameView: View {
     @State private var scene: UpUpScene
     @State private var scoreError: String?
 
-    init(initialBestScore: Int) {
-        _scene = State(initialValue: UpUpScene(initialBestScore: initialBestScore))
+    init(initialBestScore: Int, topScore: Int) {
+        _scene = State(
+            initialValue: UpUpScene(
+                initialBestScore: initialBestScore,
+                topScore: topScore
+            )
+        )
     }
 
     var body: some View {
@@ -221,6 +246,7 @@ private final class UpUpScene: SKScene {
     private var climbed: CGFloat = 0
     private var score = 0
     private var bestScore: Int
+    private var topScore: Int
     private var started = false
     private var gameOver = false
     private var gamePaused = false
@@ -232,18 +258,20 @@ private final class UpUpScene: SKScene {
 
     override init(size: CGSize) {
         bestScore = 0
+        topScore = 0
         super.init(size: size)
         backgroundColor = SKColor(red: 0.85, green: 0.95, blue: 0.98, alpha: 1)
         anchorPoint = .zero
     }
 
-    convenience init(initialBestScore: Int) {
+    convenience init(initialBestScore: Int, topScore: Int) {
         self.init(size: CGSize(width: 390, height: 844))
         bestScore = max(0, initialBestScore)
+        self.topScore = max(0, topScore)
     }
 
     override convenience init() {
-        self.init(initialBestScore: 0)
+        self.init(initialBestScore: 0, topScore: 0)
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -608,12 +636,20 @@ private final class UpUpScene: SKScene {
         hud.addChild(scoreLabel)
 
         let bestLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
-        bestLabel.text = "BEST \(bestScore)"
+        bestLabel.text = "BEST \(max(bestScore, score))"
         bestLabel.fontSize = 12
         bestLabel.fontColor = SKColor(red: 71/255, green: 85/255, blue: 105/255, alpha: 1)
         bestLabel.horizontalAlignmentMode = .left
         bestLabel.position = CGPoint(x: 18, y: size.height - 62)
         hud.addChild(bestLabel)
+
+        let topLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
+        topLabel.text = "전체 1등 \(max(topScore, score))"
+        topLabel.fontSize = 12
+        topLabel.fontColor = SKColor(red: 122/255, green: 90/255, blue: 0, alpha: 1)
+        topLabel.horizontalAlignmentMode = .left
+        topLabel.position = CGPoint(x: 18, y: size.height - 80)
+        hud.addChild(topLabel)
     }
 
     private func addPauseButton(to hud: SKNode) {

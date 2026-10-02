@@ -43,6 +43,7 @@ struct MiniGameLeaderboardSnapshot {
     let rows: [MiniGameRankRow]
     let myRank: Int?
     let myScore: Int?
+    let topScore: Int?
     let currentUserID: UUID?
 }
 
@@ -117,7 +118,31 @@ enum MiniGameRankingService {
     }
 
     private static func verifyIntegritySession(accessToken: String) async throws {
-        guard let appCheckToken = await AppIntegrity.token() else {
+        let first = try await integrityRequest(accessToken: accessToken, forceRefresh: false)
+        if (200..<300).contains(first.status) { return }
+
+        if first.status == 401 {
+            let second = try await integrityRequest(accessToken: accessToken, forceRefresh: true)
+            if (200..<300).contains(second.status) { return }
+            throw NSError(
+                domain: "AppIntegrity",
+                code: second.status,
+                userInfo: [NSLocalizedDescriptionKey: "앱 무결성 확인 실패 (\(second.status)): \(second.body.prefix(160))"]
+            )
+        }
+
+        throw NSError(
+            domain: "AppIntegrity",
+            code: first.status,
+            userInfo: [NSLocalizedDescriptionKey: "앱 무결성 확인 실패 (\(first.status)): \(first.body.prefix(160))"]
+        )
+    }
+
+    private static func integrityRequest(
+        accessToken: String,
+        forceRefresh: Bool
+    ) async throws -> (status: Int, body: String) {
+        guard let appCheckToken = await AppIntegrity.token(forceRefresh: forceRefresh) else {
             throw NSError(
                 domain: "AppIntegrity",
                 code: -1,
@@ -138,15 +163,10 @@ enum MiniGameRankingService {
         request.httpBody = Data("{}".utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-        guard (200..<300).contains(status) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw NSError(
-                domain: "AppIntegrity",
-                code: status,
-                userInfo: [NSLocalizedDescriptionKey: "앱 무결성 확인 실패 (\(status)): \(body.prefix(160))"]
-            )
-        }
+        return (
+            (response as? HTTPURLResponse)?.statusCode ?? -1,
+            String(data: data, encoding: .utf8) ?? ""
+        )
     }
 
     static func loadLeaderboard(
@@ -169,6 +189,7 @@ enum MiniGameRankingService {
                 rows: rows,
                 myRank: mine.rank,
                 myScore: mine.score,
+                topScore: rows.first?.score,
                 currentUserID: session.user.id
             )
         }
@@ -187,6 +208,7 @@ enum MiniGameRankingService {
             rows: rows,
             myRank: mine?.rank,
             myScore: mine?.score,
+            topScore: rows.first?.score,
             currentUserID: session.user.id
         )
     }
@@ -198,6 +220,7 @@ final class MiniGameHubModel: ObservableObject {
         rows: [],
         myRank: nil,
         myScore: nil,
+        topScore: nil,
         currentUserID: nil
     )
     @Published var isLoading = false
@@ -216,6 +239,7 @@ final class MiniGameHubModel: ObservableObject {
                     rows: [],
                     myRank: nil,
                     myScore: nil,
+                    topScore: nil,
                     currentUserID: nil
                 )
                 return
