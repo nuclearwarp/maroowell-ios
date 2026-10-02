@@ -262,6 +262,7 @@ private struct MaroowellInfoEditor: View {
                     field("이름", text: $draft.personName)
                     field("연락처", text: $draft.contactPhone, keyboard: .phonePad)
                     field("직책", text: $draft.positionTitle)
+                    field("퇴사 예정일", text: $draft.resignationScheduledDate, prompt: "YYYY-MM-DD")
                     field("Camp", text: $draft.campCode)
                     Picker("Wave", selection: $draft.wave) {
                         Text("미지정").tag("")
@@ -273,17 +274,24 @@ private struct MaroowellInfoEditor: View {
                     field("차량 번호", text: $draft.vehiclePlateNumber)
                 }
 
-                Section("자격 · 계정") {
+                Section("자격 · 정산 · 사업자") {
                     field("주민번호", text: $draft.residentRegistrationNumber, keyboard: .numbersAndPunctuation)
                     field("운송자격증번호", text: $draft.transportQualificationNumber)
                     field("서브 계정", text: $draft.subAccountInfo)
-                }
-
-                Section("정산 · 사업자") {
                     field("급여 은행", text: $draft.payrollBankName)
                     field("급여 계좌", text: $draft.payrollAccountNumber, keyboard: .numbersAndPunctuation)
                     field("사업자 상호", text: $draft.businessName)
                     field("사업자 번호", text: $draft.businessRegistrationNumber, keyboard: .numbersAndPunctuation)
+                }
+
+                Section("입사 · 안전 · 비상연락") {
+                    field("입사일", text: $draft.hireDate, prompt: "YYYY-MM-DD")
+                    field("안전보건교육 수료일", text: $draft.safetyHealthEducationCompletionDate, prompt: "YYYY-MM-DD")
+                    field("비상 연락처", text: $draft.emergencyContactPhone, keyboard: .phonePad)
+                    field("관계", text: $draft.emergencyContactRelationship)
+                }
+
+                Section("수수료 · 보험") {
                     field("고정 수수료", text: $draft.fixedCommissionAmount, keyboard: .numbersAndPunctuation)
                     field("고정 단가", text: $draft.fixedUnitPrice, keyboard: .numbersAndPunctuation)
                     field("용차 수수료", text: $draft.dragonCarCommission)
@@ -294,11 +302,11 @@ private struct MaroowellInfoEditor: View {
                     }
                 }
 
-                Section("입사 · 안전 · 비상연락") {
-                    field("입사일", text: $draft.hireDate, prompt: "YYYY-MM-DD")
-                    field("안전보건교육 수료일", text: $draft.safetyHealthEducationCompletionDate, prompt: "YYYY-MM-DD")
-                    field("비상 연락처", text: $draft.emergencyContactPhone, keyboard: .phonePad)
-                    field("관계", text: $draft.emergencyContactRelationship)
+                Section("지급품 · 상태") {
+                    field("하계 조끼", text: $draft.summerVestSize)
+                    field("동계 후리스", text: $draft.winterFleeceSize)
+                    Toggle("2인 1조", isOn: $draft.isTwoPersonTeam)
+                    Toggle("퇴사 처리", isOn: $draft.isResignedFlag)
                 }
 
                 if let errorMessage {
@@ -829,6 +837,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
     var personName: String
     var contactPhone: String
     var positionTitle: String
+    var resignationScheduledDate: String
     var campCode: String
     var wave: String
     var coupangID: String
@@ -848,6 +857,9 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
     var fixedUnitPrice: String
     var dragonCarCommission: String
     var employmentAccidentInsurance: String
+    var summerVestSize: String
+    var winterFleeceSize: String
+    var isTwoPersonTeam: Bool
     var isResignedFlag: Bool
     private let localID: UUID
 
@@ -865,6 +877,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
             personName: personName.nilIfBlank,
             contactPhone: contactPhone.nilIfBlank,
             positionTitle: positionTitle.nilIfBlank,
+            resignationScheduledDate: resignationScheduledDate.nilIfBlank,
             campCode: campCode.nilIfBlank,
             wave: wave.nilIfBlank,
             coupangId: coupangID.nilIfBlank,
@@ -883,7 +896,11 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
             fixedCommissionAmount: fixedCommissionAmount.nilIfBlank,
             fixedUnitPrice: fixedUnitPrice.nilIfBlank,
             dragonCarCommission: dragonCarCommission.nilIfBlank,
-            employmentAccidentInsurance: employmentAccidentInsurance.nilIfBlank
+            employmentAccidentInsurance: employmentAccidentInsurance.nilIfBlank,
+            summerVestSize: summerVestSize.nilIfBlank,
+            winterFleeceSize: winterFleeceSize.nilIfBlank,
+            isTwoPersonTeam: isTwoPersonTeam,
+            isResigned: isResignedFlag
         )
     }
 
@@ -893,6 +910,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
             personName: "",
             contactPhone: "",
             positionTitle: "",
+            resignationScheduledDate: "",
             campCode: "",
             wave: "",
             coupangID: "",
@@ -912,6 +930,9 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
             fixedUnitPrice: "",
             dragonCarCommission: "",
             employmentAccidentInsurance: "",
+            summerVestSize: "",
+            winterFleeceSize: "",
+            isTwoPersonTeam: false,
             isResignedFlag: false,
             localID: UUID()
         )
@@ -922,6 +943,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
         case personName = "person_name"
         case contactPhone = "contact_phone"
         case positionTitle = "position_title"
+        case resignationScheduledDate = "resignation_scheduled_date"
         case campCode = "camp_code"
         case wave
         case coupangID = "coupang_id"
@@ -941,18 +963,22 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
         case fixedUnitPrice = "fixed_unit_price"
         case dragonCarCommission = "dragon_car_commission"
         case employmentAccidentInsurance = "employment_accident_insurance"
+        case summerVestSize = "summer_vest_size"
+        case winterFleeceSize = "winter_fleece_size"
+        case isTwoPersonTeam = "is_two_person_team"
         case isResignedFlag = "is_resigned"
     }
 
     init(
         pkID: Int64?, personName: String, contactPhone: String, positionTitle: String,
-        campCode: String, wave: String, coupangID: String, vehiclePlateNumber: String,
+        resignationScheduledDate: String, campCode: String, wave: String, coupangID: String, vehiclePlateNumber: String,
         residentRegistrationNumber: String, transportQualificationNumber: String,
         subAccountInfo: String, payrollBankName: String, payrollAccountNumber: String,
         businessName: String, businessRegistrationNumber: String, hireDate: String,
         safetyHealthEducationCompletionDate: String, emergencyContactPhone: String,
         emergencyContactRelationship: String, fixedCommissionAmount: String,
         fixedUnitPrice: String, dragonCarCommission: String, employmentAccidentInsurance: String,
+        summerVestSize: String, winterFleeceSize: String, isTwoPersonTeam: Bool = false,
         isResignedFlag: Bool = false,
         localID: UUID = UUID()
     ) {
@@ -960,6 +986,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
         self.personName = personName
         self.contactPhone = contactPhone
         self.positionTitle = positionTitle
+        self.resignationScheduledDate = resignationScheduledDate
         self.campCode = campCode
         self.wave = wave
         self.coupangID = coupangID
@@ -979,6 +1006,9 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
         self.fixedUnitPrice = fixedUnitPrice
         self.dragonCarCommission = dragonCarCommission
         self.employmentAccidentInsurance = employmentAccidentInsurance
+        self.summerVestSize = summerVestSize
+        self.winterFleeceSize = winterFleeceSize
+        self.isTwoPersonTeam = isTwoPersonTeam
         self.isResignedFlag = isResignedFlag
         self.localID = localID
     }
@@ -989,6 +1019,7 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
         personName = Self.text(c, .personName)
         contactPhone = Self.text(c, .contactPhone)
         positionTitle = Self.text(c, .positionTitle)
+        resignationScheduledDate = Self.text(c, .resignationScheduledDate)
         campCode = Self.text(c, .campCode)
         wave = Self.text(c, .wave)
         coupangID = Self.text(c, .coupangID)
@@ -1008,6 +1039,9 @@ private struct MaroowellInfoRow: Decodable, Identifiable, Equatable {
         fixedUnitPrice = Self.text(c, .fixedUnitPrice)
         dragonCarCommission = Self.text(c, .dragonCarCommission)
         employmentAccidentInsurance = Self.text(c, .employmentAccidentInsurance)
+        summerVestSize = Self.text(c, .summerVestSize)
+        winterFleeceSize = Self.text(c, .winterFleeceSize)
+        isTwoPersonTeam = (try? c.decodeIfPresent(Bool.self, forKey: .isTwoPersonTeam)) ?? false
         isResignedFlag = (try? c.decodeIfPresent(Bool.self, forKey: .isResignedFlag)) ?? false
         localID = UUID()
     }
@@ -1025,6 +1059,7 @@ private struct MaroowellInfoPayload: Encodable {
     let personName: String?
     let contactPhone: String?
     let positionTitle: String?
+    let resignationScheduledDate: String?
     let campCode: String?
     let wave: String?
     let coupangId: String?
@@ -1044,12 +1079,17 @@ private struct MaroowellInfoPayload: Encodable {
     let fixedUnitPrice: String?
     let dragonCarCommission: String?
     let employmentAccidentInsurance: String?
+    let summerVestSize: String?
+    let winterFleeceSize: String?
+    let isTwoPersonTeam: Bool
+    let isResigned: Bool
 
     enum CodingKeys: String, CodingKey {
         case pkId = "pk_id"
         case personName = "person_name"
         case contactPhone = "contact_phone"
         case positionTitle = "position_title"
+        case resignationScheduledDate = "resignation_scheduled_date"
         case campCode = "camp_code"
         case wave
         case coupangId = "coupang_id"
@@ -1069,6 +1109,10 @@ private struct MaroowellInfoPayload: Encodable {
         case fixedUnitPrice = "fixed_unit_price"
         case dragonCarCommission = "dragon_car_commission"
         case employmentAccidentInsurance = "employment_accident_insurance"
+        case summerVestSize = "summer_vest_size"
+        case winterFleeceSize = "winter_fleece_size"
+        case isTwoPersonTeam = "is_two_person_team"
+        case isResigned = "is_resigned"
     }
 }
 

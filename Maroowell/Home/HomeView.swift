@@ -544,9 +544,17 @@ private struct HomeMenuRow: View {
             Group {
                 if let assetName = androidAssetName(for: item.title) {
                     if isRangkongArtwork(assetName) {
-                        Image(assetName)
-                            .resizable()
-                            .scaledToFit()
+                        if assetName == "game_upup_cover",
+                           let url = Bundle.main.url(forResource: "game_upup_cover", withExtension: "webp"),
+                           let image = UIImage(contentsOfFile: url.path) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFit()
+                        } else {
+                            Image(assetName)
+                                .resizable()
+                                .scaledToFit()
+                        }
                     } else {
                         ZStack {
                             RoundedRectangle(cornerRadius: 17, style: .continuous)
@@ -611,7 +619,7 @@ private struct HomeMenuRow: View {
     }
 
     private func isRangkongArtwork(_ assetName: String) -> Bool {
-        assetName == "menu_numbering_rangkong" || assetName == "menu_quantity_stats_rangkong" || assetName == "menu_minigame_v161"
+        assetName == "menu_numbering_rangkong" || assetName == "menu_quantity_stats_rangkong" || assetName == "game_upup_cover"
     }
 
     private func androidAssetName(for title: String) -> String? {
@@ -624,7 +632,7 @@ private struct HomeMenuRow: View {
         case "운수종사자 일상점검": return "menu_daily_inspection"
         case "차량 점검 / 정비": return "menu_vehicle_maintenance"
         case "지급품 사이즈": return "menu_info"
-        case "미니게임": return "menu_minigame_v161"
+        case "미니게임": return "game_upup_cover"
         case "마루웰 정보": return "menu_info"
         case "우편번호 검색": return "menu_zipcode"
         case "라우트 편집기": return "menu_route_editor"

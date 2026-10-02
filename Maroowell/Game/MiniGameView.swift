@@ -4,6 +4,7 @@ import UIKit
 
 extension Notification.Name {
     static let upUpScoreUpdated = Notification.Name("upup_score_updated")
+    static let upUpScoreSubmitFailed = Notification.Name("upup_score_submit_failed")
     static let upUpExitRequested = Notification.Name("upup_exit_requested")
 }
 
@@ -49,7 +50,7 @@ struct MiniGameHubView: View {
 
     @ViewBuilder
     private func gameCard(_ game: MiniGameConfig) -> some View {
-        NavigationLink { UpUpGameView(initialBest: model.leaderboard.myScore ?? 0) } label: {
+        NavigationLink { UpUpGameView(initialBestScore: model.leaderboard.myScore ?? 0) } label: {
             VStack(spacing: 10) {
                 upUpCover
                     .frame(width: 112, height: 112)
@@ -63,7 +64,7 @@ struct MiniGameHubView: View {
                     .foregroundStyle(MaroowellTheme.muted)
                     .multilineTextAlignment(.center)
 
-                Text("내 계정 최고 기록  \(model.leaderboard.myScore ?? 0)점")
+                Text("시즌 \(game.seasonNo) · 내 계정 최고 기록  \(model.leaderboard.myScore ?? 0)점")
                     .font(.subheadline.weight(.black))
                     .foregroundStyle(MaroowellTheme.deepYellow)
 
@@ -83,9 +84,12 @@ struct MiniGameHubView: View {
 
     private var upUpCover: some View {
         Group {
-            Image("menu_minigame_v161")
-                .resizable()
-                .scaledToFit()
+            if let url = Bundle.main.url(forResource: "game_upup_cover", withExtension: "webp"),
+               let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image).resizable().scaledToFit()
+            } else {
+                Image("menu_numbering_rangkong").resizable().scaledToFit()
+            }
         }
     }
 
@@ -104,7 +108,7 @@ struct MiniGameHubView: View {
                     .font(.headline.weight(.black))
             }
 
-            Text("시즌 \(game.seasonNo) · 전체 1~10위 · 계정별 최고점 1개")
+            Text("\(game.seasonKey) 시즌 · 전체 1~10위 · 계정별 최고점 1개")
                 .font(.caption)
                 .foregroundStyle(MaroowellTheme.muted)
 
@@ -170,9 +174,10 @@ struct MiniGameHubView: View {
 struct UpUpGameView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scene: UpUpScene
+    @State private var scoreError: String?
 
-    init(initialBest: Int) {
-        _scene = State(initialValue: UpUpScene(initialBest: initialBest))
+    init(initialBestScore: Int) {
+        _scene = State(initialValue: UpUpScene(initialBestScore: initialBestScore))
     }
 
     var body: some View {
@@ -183,6 +188,17 @@ struct UpUpGameView: View {
             .onAppear { scene.scaleMode = .resizeFill }
             .onReceive(NotificationCenter.default.publisher(for: .upUpExitRequested)) { _ in
                 dismiss()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .upUpScoreSubmitFailed)) { note in
+                scoreError = note.object as? String ?? "점수 등록에 실패했습니다."
+            }
+            .alert("점수 등록 실패", isPresented: Binding(
+                get: { scoreError != nil },
+                set: { if !$0 { scoreError = nil } }
+            )) {
+                Button("확인", role: .cancel) { scoreError = nil }
+            } message: {
+                Text(scoreError ?? "")
             }
     }
 }
@@ -213,7 +229,7 @@ private final class UpUpScene: SKScene {
     private var lastUpdateTime: TimeInterval = 0
     private var climbed: CGFloat = 0
     private var score = 0
-    private var bestScore = 0
+    private var bestScore: Int
     private var started = false
     private var gameOver = false
     private var gamePaused = false
@@ -224,18 +240,19 @@ private final class UpUpScene: SKScene {
     private let moveSpeed: CGFloat = 270
 
     override init(size: CGSize) {
+        bestScore = 0
         super.init(size: size)
         backgroundColor = SKColor(red: 0.85, green: 0.95, blue: 0.98, alpha: 1)
         anchorPoint = .zero
     }
 
-    override convenience init() {
+    convenience init(initialBestScore: Int) {
         self.init(size: CGSize(width: 390, height: 844))
+        bestScore = max(0, initialBestScore)
     }
 
-    convenience init(initialBest: Int) {
-        self.init(size: CGSize(width: 390, height: 844))
-        bestScore = max(0, initialBest)
+    override convenience init() {
+        self.init(initialBestScore: 0)
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -256,7 +273,7 @@ private final class UpUpScene: SKScene {
         platforms.removeAll()
         climbed = 0
         score = 0
-        horizontalDirection = autoStart ? 1 : 0
+        horizontalDirection = 0
         velocity = .zero
         lastUpdateTime = 0
         started = autoStart
@@ -506,9 +523,8 @@ private final class UpUpScene: SKScene {
             } catch {
                 await MainActor.run {
                     NotificationCenter.default.post(
-                        name: .upUpScoreUpdated,
-                        object: nil,
-                        userInfo: ["error": error.localizedDescription]
+                        name: .upUpScoreSubmitFailed,
+                        object: error.localizedDescription
                     )
                 }
             }
@@ -542,7 +558,6 @@ private final class UpUpScene: SKScene {
 
         if hitNames.contains("pause_button"), started {
             gamePaused = true
-            horizontalDirection = 0
             return
         }
 
@@ -556,6 +571,10 @@ private final class UpUpScene: SKScene {
 
         horizontalDirection = horizontalDirection >= 0 ? -1 : 1
     }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {}
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {}
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {}
 
     override func didFinishUpdate() {
         childNode(withName: "hud")?.removeFromParent()

@@ -1,6 +1,7 @@
 import PhotosUI
 import SwiftUI
 import UIKit
+import Supabase
 
 struct OperationsBoardView: View {
     let session: AppSession
@@ -17,8 +18,15 @@ struct OperationsBoardView: View {
             LazyVStack(alignment: .leading, spacing: 14) {
                 noticeSection
                 if store.canManage {
+                    summarySection("실시간 운영 요약", rows: store.realtimeRows, emptyText: "실시간 운영 데이터가 없습니다.")
+                    summarySection("메모", rows: store.memoRows, emptyText: "등록된 메모가 없습니다.")
                     taskSection
                     issueSection
+                    summarySection("프로세스", rows: store.workflowRows, emptyText: "진행 중 프로세스가 없습니다.")
+                    summarySection("완료 이력", rows: store.completedRows, emptyText: "완료된 업무나 이슈가 없습니다.")
+                    summarySection("인원 · 앱 활성화", rows: store.peopleRows, emptyText: "인원·앱 상태가 없습니다.")
+                    summarySection("앱 기능 · 버전", rows: store.versionRows, emptyText: "앱 버전 정보가 없습니다.")
+                    summarySection("변경 이력", rows: store.auditRows, emptyText: "변경 이력이 없습니다.")
                 }
             }
             .padding(16)
@@ -129,6 +137,24 @@ struct OperationsBoardView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func summarySection(_ title: String, rows: [OperationSummaryRow], emptyText: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader(title, count: rows.count, actionTitle: nil) {}
+            if rows.isEmpty {
+                empty(emptyText)
+            } else {
+                ForEach(rows) { row in
+                    operationCard(
+                        title: row.title,
+                        meta: row.meta,
+                        body: row.body,
+                        accent: row.accent
+                    )
                 }
             }
         }
@@ -560,6 +586,13 @@ private final class OperationsBoardStore: ObservableObject {
     @Published var tasks: [OperationTask] = []
     @Published var issues: [OperationIssue] = []
     @Published var categories: [OperationCategory] = []
+    @Published var realtimeRows: [OperationSummaryRow] = []
+    @Published var memoRows: [OperationSummaryRow] = []
+    @Published var workflowRows: [OperationSummaryRow] = []
+    @Published var completedRows: [OperationSummaryRow] = []
+    @Published var peopleRows: [OperationSummaryRow] = []
+    @Published var versionRows: [OperationSummaryRow] = []
+    @Published var auditRows: [OperationSummaryRow] = []
     @Published var noticeCamps: [NoticeTargetCamp] = []
     @Published var noticeAccounts: [NoticeTargetAccount] = []
     @Published var canCompanyBroadcast = false
@@ -583,13 +616,24 @@ private final class OperationsBoardStore: ObservableObject {
         do {
             if canManage {
                 let data = try await call("bootstrap", method: "GET", body: nil)
+                let allTasks = Self.tasks(data["tasks"])
+                let allIssues = Self.issues(data["issues"])
                 notices = Self.notices(data["notices"])
-                tasks = Self.tasks(data["tasks"]).filter { !["completed", "cancelled"].contains($0.status) && !$0.isArchived }
-                issues = Self.issues(data["issues"]).filter { !["resolved", "closed"].contains($0.status) && !$0.isArchived }
+                tasks = allTasks.filter { !["completed", "cancelled"].contains($0.status) && !$0.isArchived }
+                issues = allIssues.filter { !["resolved", "closed"].contains($0.status) && !$0.isArchived }
                 categories = Self.categories(data["categories"])
+                realtimeRows = Self.realtime(data["realtime"])
+                memoRows = Self.memos(data["memos"])
+                workflowRows = Self.workflows(data["workflows"])
+                completedRows = Self.completed(data["tasks"], data["issues"])
+                peopleRows = Self.people(data["people"])
+                auditRows = Self.audit(data["audit_logs"])
+                versionRows = (try? await fetchVersionRows()) ?? []
             } else {
                 notices = try await NoticeBoardStore.fetchNotices()
                 tasks = []; issues = []; categories = []
+                realtimeRows = []; memoRows = []; workflowRows = []
+                completedRows = []; peopleRows = []; versionRows = []; auditRows = []
             }
             loaded = true
         } catch {
@@ -760,6 +804,43 @@ private final class OperationsBoardStore: ObservableObject {
         await load()
     }
 
+    private func fetchVersionRows() async throws -> [OperationSummaryRow] {
+        let client = SupabaseService.shared.client
+        let minimums: [AppMinimumVersionRow] = try await client
+            .from("app_min_versions")
+            .select("platform,min_build,min_version,is_force_update,updated_at")
+            .order("platform", ascending: true)
+            .execute()
+            .value
+        let sources: [AppSourceVersionRow] = try await client
+            .from("app_source_versions")
+            .select("platform,build,version,updated_at")
+            .order("platform", ascending: true)
+            .execute()
+            .value
+
+        let platforms = Array(Set(minimums.map(\.platform) + sources.map(\.platform))).sorted()
+        return platforms.map { platform in
+            let minimum = minimums.first { $0.platform == platform }
+            let source = sources.first { $0.platform == platform }
+            let display = platform.lowercased() == "ios" ? "iOS" :
+                (platform.lowercased() == "android" ? "Android" : platform)
+            let sourceText = source.map { "소스 v\($0.version) (\($0.build))" } ?? "소스 정보 없음"
+            let minimumText = minimum.map { "최소 v\($0.minVersion) (\($0.minBuild))" } ?? "최소 버전 미설정"
+            let policyText = minimum?.isForceUpdate == true ? "필수 업데이트" : "강제 업데이트 해제"
+            return OperationSummaryRow(
+                id: "version-\(platform)",
+                title: display,
+                meta: [sourceText, minimumText, policyText].joined(separator: " · "),
+                body: [
+                    source.map { "소스 갱신 \($0.updatedAt.shortDateTime)" },
+                    minimum.map { "정책 갱신 \($0.updatedAt.shortDateTime)" }
+                ].compactMap { $0 }.joined(separator: " · "),
+                accent: minimum?.isForceUpdate == true ? .red : .blue
+            )
+        }
+    }
+
     private func call(_ path: String, method: String, body: [String: Any]?) async throws -> [String: Any] {
         let auth = try await SupabaseService.shared.client.auth.session
         var request = URLRequest(url: URL(string: "https://home-system.brain-0f6.workers.dev/api/\(path)")!)
@@ -783,6 +864,105 @@ private final class OperationsBoardStore: ObservableObject {
             )
         }
         return object["data"] as? [String: Any] ?? [:]
+    }
+
+    private static func dictionaries(_ value: Any?) -> [[String: Any]] {
+        value as? [[String: Any]] ?? []
+    }
+
+    private static func realtime(_ value: Any?) -> [OperationSummaryRow] {
+        guard let row = value as? [String: Any] else { return [] }
+        let delivery = Int(text(row["delivery_total"])) ?? 0
+        let completed = Int(text(row["delivery_completed"])) ?? 0
+        return [OperationSummaryRow(
+            id: "realtime",
+            title: "배송 현황",
+            meta: "캠프 \(text(row["camp_count"]))곳 · 기사 \(text(row["driver_count"]))명 · 주간 \(text(row["day_count"]))명 · 야간 \(text(row["night_count"]))명",
+            body: "배송 \(completed)/\(delivery) · 완료율 \(text(row["delivery_rate"]))% · 반품 \(text(row["return_collected"])) · 프백 \(text(row["freshbag_collected"]))",
+            accent: .blue
+        )]
+    }
+
+    private static func memos(_ value: Any?) -> [OperationSummaryRow] {
+        dictionaries(value).prefix(20).map {
+            OperationSummaryRow(
+                id: "memo-" + text($0["id"]),
+                title: "메모",
+                meta: "수정 " + text($0["updated_at"] ?? $0["created_at"]).shortDateTime,
+                body: text($0["body"]),
+                accent: .blue
+            )
+        }
+    }
+
+    private static func workflows(_ value: Any?) -> [OperationSummaryRow] {
+        dictionaries(value).filter { !bool($0["is_archived"]) }.prefix(20).map {
+            let meta = [
+                text($0["status"]).isEmpty ? "진행중" : text($0["status"]),
+                text($0["camp_code"]).isEmpty ? "공통" : text($0["camp_code"]),
+                text($0["wave"]), text($0["assignee_name"]),
+                text($0["due_date"]).isEmpty ? "" : "마감 " + text($0["due_date"])
+            ].filter { !$0.isEmpty }.joined(separator: " · ")
+            return OperationSummaryRow(
+                id: "workflow-" + text($0["id"]),
+                title: text($0["subject_name"]).isEmpty ? "운영 프로세스" : text($0["subject_name"]),
+                meta: meta,
+                body: text($0["notes"]),
+                accent: .purple
+            )
+        }
+    }
+
+    private static func completed(_ tasks: Any?, _ issues: Any?) -> [OperationSummaryRow] {
+        let taskRows = dictionaries(tasks).filter { ["completed", "cancelled"].contains(text($0["status"])) }
+        let issueRows = dictionaries(issues).filter { ["resolved", "closed"].contains(text($0["status"])) }
+        let a = taskRows.prefix(10).map {
+            OperationSummaryRow(
+                id: "completed-task-" + text($0["id"]),
+                title: text($0["title"]),
+                meta: "업무 · " + text($0["status"]) + " · " + text($0["updated_at"]).shortDateTime,
+                body: text($0["body"]), accent: .green
+            )
+        }
+        let b = issueRows.prefix(10).map {
+            OperationSummaryRow(
+                id: "completed-issue-" + text($0["id"]),
+                title: text($0["title"]),
+                meta: "이슈 · " + text($0["status"]) + " · " + text($0["updated_at"]).shortDateTime,
+                body: text($0["body"]), accent: .green
+            )
+        }
+        return Array(a) + Array(b)
+    }
+
+    private static func people(_ value: Any?) -> [OperationSummaryRow] {
+        dictionaries(value).prefix(40).map {
+            let state = text($0["status"]).isEmpty ? "미가입" : text($0["status"])
+            let push = text($0["push_status"]).isEmpty ? "미확인" : text($0["push_status"])
+            let devices = text($0["active_device_count"]).isEmpty ? "0" : text($0["active_device_count"])
+            let meta = [
+                text($0["position_title"]), text($0["camp_code"]), text($0["wave"]),
+                "앱 " + state, "기기 " + devices + "대", "알림 " + push
+            ].filter { !$0.isEmpty }.joined(separator: " · ")
+            return OperationSummaryRow(
+                id: "person-" + (text($0["user_id"]).isEmpty ? text($0["pk_id"]) : text($0["user_id"])),
+                title: text($0["person_name"]).isEmpty ? "이름 미등록" : text($0["person_name"]),
+                meta: meta, body: "", accent: state == "active" ? .green : .gray
+            )
+        }
+    }
+
+    private static func audit(_ value: Any?) -> [OperationSummaryRow] {
+        dictionaries(value).prefix(30).map {
+            OperationSummaryRow(
+                id: "audit-" + text($0["id"]),
+                title: text($0["action"]).isEmpty ? "변경" : text($0["action"]),
+                meta: [text($0["table_name"]), text($0["row_id"]), text($0["created_at"]).shortDateTime]
+                    .filter { !$0.isEmpty }.joined(separator: " · "),
+                body: text($0["actor_user_id"]),
+                accent: .gray
+            )
+        }
     }
 
     private static func notices(_ value: Any?) -> [OperationNotice] {
@@ -880,6 +1060,42 @@ private final class NoticeBoardStore: ObservableObject {
                 createdAt: OperationsBoardStore.text($0["created_at"])
             )
         }
+    }
+}
+
+private struct OperationSummaryRow: Identifiable {
+    let id: String
+    let title: String
+    let meta: String
+    let body: String
+    let accent: Color
+}
+
+private struct AppMinimumVersionRow: Decodable {
+    let platform: String
+    let minBuild: Int
+    let minVersion: String
+    let isForceUpdate: Bool
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case platform
+        case minBuild = "min_build"
+        case minVersion = "min_version"
+        case isForceUpdate = "is_force_update"
+        case updatedAt = "updated_at"
+    }
+}
+
+private struct AppSourceVersionRow: Decodable {
+    let platform: String
+    let build: Int
+    let version: String
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case platform, build, version
+        case updatedAt = "updated_at"
     }
 }
 
