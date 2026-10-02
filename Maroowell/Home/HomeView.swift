@@ -544,17 +544,9 @@ private struct HomeMenuRow: View {
             Group {
                 if let assetName = androidAssetName(for: item.title) {
                     if isRangkongArtwork(assetName) {
-                        if assetName == "menu_minigame_v161",
-                           let url = Bundle.main.url(forResource: "menu_minigame_v161", withExtension: "webp"),
-                           let image = UIImage(contentsOfFile: url.path) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFit()
-                        } else {
-                            Image(assetName)
-                                .resizable()
-                                .scaledToFit()
-                        }
+                        Image(assetName)
+                            .resizable()
+                            .scaledToFit()
                     } else {
                         ZStack {
                             RoundedRectangle(cornerRadius: 17, style: .continuous)

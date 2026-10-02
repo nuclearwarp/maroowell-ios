@@ -83,14 +83,9 @@ struct MiniGameHubView: View {
     }
 
     private var upUpCover: some View {
-        Group {
-            if let url = Bundle.main.url(forResource: "game_upup_cover", withExtension: "webp"),
-               let image = UIImage(contentsOfFile: url.path) {
-                Image(uiImage: image).resizable().scaledToFit()
-            } else {
-                Image("menu_numbering_rangkong").resizable().scaledToFit()
-            }
-        }
+        Image("game_upup_cover")
+            .resizable()
+            .scaledToFit()
     }
 
     @ViewBuilder
@@ -216,13 +211,7 @@ private final class TotePlatform {
 }
 
 private final class UpUpScene: SKScene {
-    private let player: SKSpriteNode = {
-        if let url = Bundle.main.url(forResource: "game_upup_player", withExtension: "webp"),
-           let image = UIImage(contentsOfFile: url.path) {
-            return SKSpriteNode(texture: SKTexture(image: image))
-        }
-        return SKSpriteNode(texture: SKTexture(imageNamed: "menu_numbering_rangkong"))
-    }()
+    private let player = SKSpriteNode(texture: SKTexture(imageNamed: "game_upup_player"))
     private var platforms: [TotePlatform] = []
     private var horizontalDirection: CGFloat = 0
     private var velocity = CGVector.zero
@@ -273,7 +262,7 @@ private final class UpUpScene: SKScene {
         platforms.removeAll()
         climbed = 0
         score = 0
-        horizontalDirection = 0
+        horizontalDirection = autoStart ? 1 : 0
         velocity = .zero
         lastUpdateTime = 0
         started = autoStart
