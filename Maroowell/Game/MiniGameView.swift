@@ -271,6 +271,7 @@ private final class UpUpScene: SKScene {
 
         addChild(player)
         player.size = playerSize
+        player.xScale = 1
         player.zPosition = 20
 
         let baseWidth = min(118, size.width * 0.33)
@@ -416,6 +417,8 @@ private final class UpUpScene: SKScene {
             dt = min(0.032, CGFloat(currentTime - lastUpdateTime))
         }
         lastUpdateTime = currentTime
+
+        player.xScale = horizontalDirection < 0 ? -1 : 1
 
         let previousBottom = player.position.y - playerSize.height / 2
         let wantedVX = horizontalDirection * moveSpeed
