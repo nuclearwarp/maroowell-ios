@@ -211,7 +211,9 @@ private final class TotePlatform {
 }
 
 private final class UpUpScene: SKScene {
-    private let player = SKSpriteNode(texture: SKTexture(imageNamed: "game_upup_player"))
+    private let rightPlayerTexture = SKTexture(imageNamed: "game_upup_player_right")
+    private let leftPlayerTexture = SKTexture(imageNamed: "game_upup_player_left")
+    private lazy var player = SKSpriteNode(texture: rightPlayerTexture)
     private var platforms: [TotePlatform] = []
     private var horizontalDirection: CGFloat = 0
     private var velocity = CGVector.zero
@@ -271,6 +273,7 @@ private final class UpUpScene: SKScene {
 
         addChild(player)
         player.size = playerSize
+        player.texture = rightPlayerTexture
         player.xScale = 1
         player.zPosition = 20
 
@@ -418,7 +421,7 @@ private final class UpUpScene: SKScene {
         }
         lastUpdateTime = currentTime
 
-        player.xScale = horizontalDirection < 0 ? -1 : 1
+        player.texture = horizontalDirection < 0 ? leftPlayerTexture : rightPlayerTexture
 
         let previousBottom = player.position.y - playerSize.height / 2
         let wantedVX = horizontalDirection * moveSpeed
@@ -556,12 +559,14 @@ private final class UpUpScene: SKScene {
         if !started {
             started = true
             horizontalDirection = 1
+            player.texture = rightPlayerTexture
             velocity.dy = jumpSpeed
             lastUpdateTime = 0
             return
         }
 
         horizontalDirection = horizontalDirection >= 0 ? -1 : 1
+        player.texture = horizontalDirection < 0 ? leftPlayerTexture : rightPlayerTexture
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {}
