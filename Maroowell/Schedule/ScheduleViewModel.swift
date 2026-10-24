@@ -24,6 +24,10 @@ final class ScheduleViewModel: ObservableObject {
     var selectedDate: Date { weekDates[min(max(selectedDayIndex, 0), 6)] }
     var dirtyCount: Int { dirtyKeys.count }
     var canSave: Bool { !dirtyKeys.isEmpty && !isLoading && !isSaving }
+    var canOpenMetaUpload: Bool {
+        selectedCamp != nil && !isLoading && !isSaving &&
+        dirtyKeys.isEmpty && !allRouteRows.isEmpty
+    }
     var suggestions: [String] { driverAccounts.map(\.displayName) }
 
     var metaUploadPath: String? {
@@ -35,20 +39,20 @@ final class ScheduleViewModel: ObservableObject {
     }
 
     func selectCamp(_ camp: ScheduleCampOption) async {
-        guard !isLoading && !isSaving else { return }
+        guard !isLoading && !isSaving, canDiscardCurrentChanges else { return }
         selectedCamp = camp
         await loadWeek()
     }
 
     func moveWeek(by days: Int) async {
-        guard !isLoading && !isSaving else { return }
+        guard !isLoading && !isSaving, canDiscardCurrentChanges else { return }
         weekStart = ScheduleDatePolicy.addingDays(days, to: weekStart)
         selectedDayIndex = ScheduleDatePolicy.dayIndex(for: .now, inWeekStarting: weekStart)
         if selectedCamp != nil { await loadWeek() }
     }
 
     func currentWeek() async {
-        guard !isLoading && !isSaving else { return }
+        guard !isLoading && !isSaving, canDiscardCurrentChanges else { return }
         weekStart = ScheduleDatePolicy.sunday()
         selectedDayIndex = ScheduleDatePolicy.dayIndex(for: .now, inWeekStarting: weekStart)
         if selectedCamp != nil { await loadWeek() }
@@ -126,14 +130,70 @@ final class ScheduleViewModel: ObservableObject {
         successMessage = nil
         defer { isSaving = false }
 
+        // The only persistent source is the shared schedule API/DB.
+        // Keep in-memory edits until the server returns and a read-back confirms them.
+        let rows = dirtyKeys
+            .sorted { ($0.date, $0.routeLabel) < ($1.date, $1.routeLabel) }
+            .map { makeSaveRow(key: $0, camp: selectedCamp) }
+
         do {
-            let rows = dirtyKeys.map { makeSaveRow(key: $0, camp: selectedCamp) }
             let result = try await api.save(rows: rows)
-            successMessage = "입차 스케줄 \(result.saved + result.deleted)건 저장 완료"
-            await loadWeek()
+            guard result.saved == rows.count && result.skipped == 0 else {
+                throw ScheduleAPIError.server(
+                    "서버 저장 결과가 일치하지 않습니다 (요청 \(rows.count)건, 반영 \(result.saved)건). 입력 내용은 유지됩니다."
+                )
+            }
+
+            let confirmed = try await api.loadWeek(
+                camp: selectedCamp.name,
+                wave: selectedCamp.wave,
+                weekStart: weekStart
+            )
+            guard serverContainsSavedRows(confirmed, expected: rows) else {
+                throw ScheduleAPIError.server(
+                    "서버 재조회에서 일부 변경사항이 확인되지 않았습니다. 입력 내용은 유지되며 다시 저장할 수 있습니다."
+                )
+            }
+
+            apply(confirmed)
+            successMessage = "서버 DB 저장 및 재조회 확인: \(result.saved)건"
         } catch {
+            // No local success or destructive reload after a failed/unverified save.
             errorMessage = friendly(error)
         }
+    }
+
+    private var canDiscardCurrentChanges: Bool {
+        guard dirtyKeys.isEmpty else {
+            errorMessage = "저장하지 않은 변경사항이 있습니다. 서버에 저장한 뒤 캠프나 주차를 변경하거나 변경사항을 취소해주세요."
+            return false
+        }
+        return true
+    }
+
+    private func serverContainsSavedRows(
+        _ response: ScheduleWeekData,
+        expected: [ScheduleSaveRow]
+    ) -> Bool {
+        for row in expected {
+            let matches = response.schedules.filter {
+                $0.scheduleDate == row.scheduleDate &&
+                $0.wave == ScheduleNormalization.wave(row.wave) &&
+                $0.routeLabel == ScheduleNormalization.route(row.routeLabel)
+            }
+            if row.isActive {
+                let name = (row.driverDisplayName ?? row.driverName ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty,
+                      matches.contains(where: {
+                          $0.isActive &&
+                          $0.displayValue.trimmingCharacters(in: .whitespacesAndNewlines) == name
+                      }) else { return false }
+            } else {
+                guard !matches.contains(where: { $0.isActive }) else { return false }
+            }
+        }
+        return true
     }
 
     func discardChanges() {
