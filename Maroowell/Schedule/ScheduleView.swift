@@ -36,9 +36,13 @@ struct ScheduleView: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
-                    showMetaUpload = true
+                    if model.canOpenMetaUpload {
+                        showMetaUpload = true
+                    } else {
+                        model.errorMessage = "META 전송 전에 캠프 스케줄을 불러오고 변경사항을 서버에 저장해주세요."
+                    }
                 } label: {
-                    Label("META 전송", systemImage: "arrow.up.doc.fill")
+                    Label("META 자동 전송", systemImage: "arrow.up.doc.fill")
                 }
                 .disabled(model.selectedCamp == nil || model.isLoading || model.isSaving)
 
