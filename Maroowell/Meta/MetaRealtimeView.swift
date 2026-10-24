@@ -135,8 +135,8 @@ struct MetaRealtimeSummaryCard: View {
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                 MetaMetricPanel(title: "배송", primary: "\(summary.delivery.completed)/\(summary.delivery.total)", secondary: "진행 \(summary.delivery.rate.percent1)")
-                MetaMetricPanel(title: "회수", primary: "\(summary.returns.collected)/\(summary.returns.total)", secondary: "회수 \(summary.returns.collectionRate.percent1)")
-                MetaMetricPanel(title: "프백", primary: "\(summary.freshbag.collected)/\(summary.freshbag.total)", secondary: "회수 \(summary.freshbag.collectionRate.percent1)")
+                MetaMetricPanel(title: "회수", primary: "\(summary.returns.collected)/\(summary.returns.total)", secondary: "미회수 \(summary.returns.uncollected) · 회수대기 \(summary.returns.assigned)")
+                MetaMetricPanel(title: "프백", primary: "\(summary.freshbag.collected)/\(summary.freshbag.total)", secondary: "미회수 \(summary.freshbag.uncollected) · 회수대기 \(summary.freshbag.assigned)")
                 MetaMetricPanel(title: "프레시 배송", primary: summary.freshDelivery.hasData ? "\(summary.freshDelivery.completed)/\(summary.freshDelivery.total)" : "-", secondary: summary.freshDelivery.hasData ? summary.freshDelivery.rate.percent1 : "데이터 없음")
             }
         }
@@ -181,6 +181,9 @@ private struct MetaCampSummaryCard: View {
                     .foregroundStyle(MaroowellTheme.muted)
             }
             Text("배송 \(camp.delivery.completed)/\(camp.delivery.total) · \(camp.delivery.rate.percent1) · 회수 \(camp.returns.collected)/\(camp.returns.total) · 프백 \(camp.freshbag.collected)/\(camp.freshbag.total)")
+                .font(.caption)
+                .foregroundStyle(MaroowellTheme.muted)
+            Text("프백 미회수 \(camp.freshbag.uncollected) · 회수대기 \(camp.freshbag.assigned) · 반품 미회수 \(camp.returns.uncollected) · 회수대기 \(camp.returns.assigned)")
                 .font(.caption)
                 .foregroundStyle(MaroowellTheme.muted)
             if camp.scheduledCount > 0 {
@@ -230,9 +233,9 @@ struct MetaDriverCard: View {
                 MetaTinyMetric(label: "완료", value: row.delivery.completed)
             }
 
-            HStack(spacing: 8) {
-                Text("회수 \(row.returns.collected)/\(row.returns.total)")
-                Text("프백 \(row.freshbag.collected)/\(row.freshbag.total)")
+            VStack(alignment: .leading, spacing: 5) {
+                Text("반품 회수 \(row.returns.collected) · 미회수 \(row.returns.uncollected) · 회수대기 \(row.returns.assigned)")
+                Text("프백 회수 \(row.freshbag.collected) · 미회수 \(row.freshbag.uncollected) · 회수대기 \(row.freshbag.assigned)")
                 if row.freshDelivery.hasData {
                     Text("프레시배송 \(row.freshDelivery.completed)/\(row.freshDelivery.total)")
                 }
@@ -305,6 +308,7 @@ struct MetaCollection: Hashable {
     var collectionRate: Double {
         total > 0 ? Double(collected) * 100 / Double(total) : 0
     }
+    var remaining: Int { max(0, assigned) }
 
     mutating func add(_ other: MetaCollection) {
         total += other.total
