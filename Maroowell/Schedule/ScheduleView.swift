@@ -4,6 +4,7 @@ struct ScheduleView: View {
     @StateObject private var model = ScheduleViewModel()
     @State private var showDiscardAlert = false
     @State private var showMetaUpload = false
+    @FocusState private var focusedField: ScheduleCellKey?
 
     var body: some View {
         ScrollView {
@@ -22,7 +23,7 @@ struct ScheduleView: View {
                 } else {
                     LazyVStack(spacing: 8) {
                         ForEach(model.routeRows) { row in
-                            ScheduleRouteCard(model: model, row: row)
+                            ScheduleRouteCard(model: model, row: row, focusedField: $focusedField)
                         }
                     }
                 }
@@ -30,35 +31,10 @@ struct ScheduleView: View {
             .padding(16)
             .padding(.bottom, 28)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(MaroowellTheme.background)
         .navigationTitle("입차 스케줄")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    if model.canOpenMetaUpload {
-                        showMetaUpload = true
-                    } else {
-                        model.errorMessage = "META 전송 전에 캠프 스케줄을 불러오고 변경사항을 서버에 저장해주세요."
-                    }
-                } label: {
-                    Label("META 자동 전송", systemImage: "arrow.up.doc.fill")
-                }
-                .disabled(model.selectedCamp == nil || model.isLoading || model.isSaving)
-
-                Button {
-                    Task { await model.save() }
-                } label: {
-                    if model.isSaving {
-                        ProgressView()
-                    } else {
-                        Text(model.dirtyCount > 0 ? "저장 \(model.dirtyCount)" : "저장")
-                            .fontWeight(.bold)
-                    }
-                }
-                .disabled(!model.canSave)
-            }
-        }
         .sheet(isPresented: $showMetaUpload) {
             NavigationStack {
                 if let path = model.metaUploadPath {
@@ -133,38 +109,107 @@ struct ScheduleView: View {
                         .background(Color.orange.opacity(0.12), in: Capsule())
                 }
             }
+
+            actionButtons
         }
         .padding(16)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: 22).stroke(MaroowellTheme.border.opacity(0.75)) }
     }
 
+    private var actionButtons: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Button {
+                    focusedField = nil
+                    Task { await model.save() }
+                } label: {
+                    HStack(spacing: 5) {
+                        if model.isSaving {
+                            ProgressView()
+                                .tint(MaroowellTheme.ink)
+                        } else {
+                            Image(systemName: "square.and.arrow.down.fill")
+                        }
+                        Text(model.dirtyCount > 0 ? "서버 저장 (\(model.dirtyCount))" : "서버 저장")
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(MaroowellTheme.ink)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(MaroowellTheme.yellow, in: RoundedRectangle(cornerRadius: 12))
+                    .opacity(model.canSave ? 1 : 0.48)
+                }
+                .buttonStyle(.plain)
+                .disabled(!model.canSave)
+                .accessibilityIdentifier("schedule-server-save")
+
+                Button {
+                    focusedField = nil
+                    if model.canOpenMetaUpload {
+                        showMetaUpload = true
+                    } else {
+                        model.errorMessage = "메타어드민 전송 전에 캠프 스케줄을 불러오고 변경사항을 서버에 저장해주세요."
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "paperplane.fill")
+                        Text("메타어드민 전송")
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(MaroowellTheme.ink, in: RoundedRectangle(cornerRadius: 12))
+                    .opacity(model.selectedCamp == nil || model.isLoading || model.isSaving ? 0.48 : 1)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.selectedCamp == nil || model.isLoading || model.isSaving)
+                .accessibilityIdentifier("schedule-meta-upload")
+            }
+
+            Text("서버 저장과 메타어드민 전송은 별도입니다. 저장 후 전송 버튼을 눌러주세요.")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(MaroowellTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // All seven days must be visible at once, even on compact iPhone screens.
     private var daySelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 7) {
+        GeometryReader { geometry in
+            HStack(spacing: 4) {
                 ForEach(Array(model.weekDates.enumerated()), id: \.offset) { index, date in
                     Button {
+                        focusedField = nil
                         model.selectedDayIndex = index
                     } label: {
                         let pieces = ScheduleDatePolicy.dayLabel(date).split(separator: "\n").map(String.init)
                         VStack(spacing: 3) {
                             Text(pieces.first ?? "")
-                                .font(.caption.weight(.black))
+                                .font(.system(size: 11, weight: .bold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                             Text(pieces.count > 1 ? pieces[1] : "")
-                                .font(.caption2.weight(.bold))
+                                .font(.system(size: 10, weight: .semibold))
+                                .lineLimit(1)
                         }
                         .foregroundStyle(index == 0 ? Color.red.opacity(0.78) : MaroowellTheme.ink)
-                        .frame(width: 52, height: 54)
-                        .background(index == model.selectedDayIndex ? MaroowellTheme.yellow.opacity(0.22) : Color.white, in: RoundedRectangle(cornerRadius: 14))
+                        .frame(width: max(0, (geometry.size.width - 24) / 7), height: 54)
+                        .background(index == model.selectedDayIndex ? MaroowellTheme.yellow.opacity(0.22) : Color.white, in: RoundedRectangle(cornerRadius: 11))
                         .overlay {
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: 11)
                                 .stroke(index == model.selectedDayIndex ? MaroowellTheme.deepYellow : MaroowellTheme.border.opacity(0.65), lineWidth: index == model.selectedDayIndex ? 2 : 1)
                         }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(ScheduleDatePolicy.fullDayLabel(date))
                 }
             }
         }
+        .frame(height: 54)
     }
 
     private var statusBar: some View {
@@ -180,6 +225,7 @@ struct ScheduleView: View {
 
     private func weekButton(_ title: String, symbol: String, action: @escaping () async -> Void) -> some View {
         Button {
+            focusedField = nil
             Task { await action() }
         } label: {
             Label(title, systemImage: symbol)
@@ -209,6 +255,7 @@ struct ScheduleView: View {
 private struct ScheduleRouteCard: View {
     @ObservedObject var model: ScheduleViewModel
     let row: ScheduleRouteRow
+    @FocusState.Binding var focusedField: ScheduleCellKey?
 
     private var locked: Bool { model.isLocked(row) }
 
@@ -255,6 +302,9 @@ private struct ScheduleRouteCard: View {
                     ))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .focused($focusedField, equals: ScheduleCellKey(date: ScheduleDatePolicy.iso(model.selectedDate), routeLabel: row.label))
+                    .submitLabel(.done)
+                    .onSubmit { focusedField = nil }
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 12)
                     .frame(height: 46)
