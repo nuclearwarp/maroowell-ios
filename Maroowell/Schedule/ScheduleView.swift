@@ -4,6 +4,11 @@ struct ScheduleView: View {
     @StateObject private var model = ScheduleViewModel()
     @State private var showDiscardAlert = false
     @State private var showMetaUpload = false
+    @State private var metaPreview: NativeMetaPreview?
+    @State private var metaProgress = ""
+    @State private var metaBusy = false
+    @State private var metaAlert = false
+    @State private var metaError: String?
     @FocusState private var focusedField: ScheduleCellKey?
 
     var body: some View {
@@ -35,13 +40,27 @@ struct ScheduleView: View {
         .background(MaroowellTheme.background)
         .navigationTitle("입차 스케줄")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showMetaUpload) {
-            NavigationStack {
-                if let path = model.metaUploadPath {
-                    MaroowellWebView(title: "메타어드민 전송", path: path)
-                } else {
-                    ContentUnavailableView("캠프를 먼저 선택해주세요.", systemImage: "calendar.badge.exclamationmark")
+        .confirmationDialog("메타어드민 스케줄 전송", isPresented: $metaAlert, titleVisibility: .visible) {
+            Button("🚀 메타어드민 전송") {
+                if let preview = metaPreview {
+                    Task { await transferMeta(preview) }
                 }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            if let preview = metaPreview {
+                Text("\(preview.camp) · \(preview.metaDate)\n기존 등록 \(preview.resetCount)명 휴무 처리 후 신규 \(preview.applyCount)명 등록합니다.")
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if metaBusy {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text(metaProgress).font(.caption.weight(.semibold))
+                }
+                .padding(12)
+                .background(.regularMaterial, in: Capsule())
+                .padding(.bottom, 12)
             }
         }
         .alert("입차 스케줄", isPresented: Binding(
@@ -54,6 +73,38 @@ struct ScheduleView: View {
             }
         } message: {
             Text(model.errorMessage ?? model.successMessage ?? "")
+        }
+    }
+
+    @MainActor
+    private func prepareMeta() async {
+        guard model.canOpenMetaUpload, let camp = model.selectedCamp else {
+            model.errorMessage = "서버에 저장한 뒤 다시 시도해주세요."
+            return
+        }
+        metaBusy = true
+        metaProgress = "메타어드민 기존 등록 확인 중"
+        defer { metaBusy = false }
+        do {
+            let preview = try await NativeMetaAPI.shared.preview(camp: camp.name, wave: camp.wave, date: ScheduleDatePolicy.iso(model.selectedDate))
+            metaPreview = preview
+            metaAlert = true
+        } catch {
+            model.errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func transferMeta(_ preview: NativeMetaPreview) async {
+        metaBusy = true
+        defer { metaBusy = false }
+        do {
+            try await NativeMetaAPI.shared.transfer(preview) { message in
+                metaProgress = message
+            }
+            model.successMessage = "메타어드민 전송 및 실제 등록 검증 완료 · \(preview.metaDate)"
+        } catch {
+            model.errorMessage = "메타어드민 전송 중단: \(error.localizedDescription)"
         }
     }
 
@@ -151,25 +202,25 @@ struct ScheduleView: View {
                 Button {
                     focusedField = nil
                     if model.canOpenMetaUpload {
-                        showMetaUpload = true
+                        Task { await prepareMeta() }
                     } else {
                         model.errorMessage = "메타어드민 전송 전에 캠프 스케줄을 불러오고 변경사항을 서버에 저장해주세요."
                     }
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "paperplane.fill")
-                        Text("메타어드민 전송")
+                        Text("🚀 메타어드민 전송")
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                     }
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(MaroowellTheme.ink, in: RoundedRectangle(cornerRadius: 12))
-                    .opacity(model.selectedCamp == nil || model.isLoading || model.isSaving ? 0.48 : 1)
+                    .background(Color(red: 0.08, green: 0.67, blue: 0.30), in: RoundedRectangle(cornerRadius: 12))
+                    .opacity(model.selectedCamp == nil || model.isLoading || model.isSaving || metaBusy ? 0.48 : 1)
                 }
                 .buttonStyle(.plain)
-                .disabled(model.selectedCamp == nil || model.isLoading || model.isSaving)
+                .disabled(model.selectedCamp == nil || model.isLoading || model.isSaving || metaBusy)
                 .accessibilityIdentifier("schedule-meta-upload")
             }
 
