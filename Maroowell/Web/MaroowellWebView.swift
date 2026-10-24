@@ -182,6 +182,7 @@ private struct MaroowellWKWebView: UIViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.keyboardDismissMode = .interactive
         context.coordinator.load(path: path, in: webView)
@@ -202,8 +203,44 @@ private struct MaroowellWKWebView: UIViewRepresentable {
         return String(json.dropFirst().dropLast())
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var loadedPath: String?
+
+        private func presentDialog(message: String, confirm: Bool, completion: @escaping (Bool) -> Void) {
+            let alert = UIAlertController(title: "마루웰", message: message, preferredStyle: .alert)
+            if confirm {
+                alert.addAction(UIAlertAction(title: "취소", style: .cancel) { _ in completion(false) })
+            }
+            alert.addAction(UIAlertAction(title: confirm ? "전송" : "확인", style: .default) { _ in completion(true) })
+            guard let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+                let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+                completion(false)
+                return
+            }
+            var presenter = root
+            while let presented = presenter.presentedViewController { presenter = presented }
+            presenter.present(alert, animated: true)
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            runJavaScriptConfirmPanelWithMessage message: String,
+            initiatedByFrame frame: WKFrameInfo,
+            completionHandler: @escaping (Bool) -> Void
+        ) {
+            presentDialog(message: message, confirm: true, completion: completionHandler)
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            runJavaScriptAlertPanelWithMessage message: String,
+            initiatedByFrame frame: WKFrameInfo,
+            completionHandler: @escaping () -> Void
+        ) {
+            presentDialog(message: message, confirm: false) { _ in completionHandler() }
+        }
 
         func load(path: String, in webView: WKWebView) {
             guard let url = trustedURL(path: path) else { return }
