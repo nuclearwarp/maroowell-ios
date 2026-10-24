@@ -59,21 +59,30 @@ struct ScheduleView: View {
 
     private var controls: some View {
         VStack(spacing: 12) {
-            HStack {
+            HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("캠프 / WAVE")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(MaroowellTheme.muted)
+                    HStack(spacing: 5) {
+                        Text("캠프 / WAVE")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(MaroowellTheme.muted)
+                        if model.isLoading || model.isSaving {
+                            ProgressView()
+                                .controlSize(.mini)
+                        }
+                    }
                     Menu {
                         ForEach(ScheduleCampOption.all) { camp in
                             Button("\(camp.name) · \(camp.waveLabel)") {
+                                focusedField = nil
                                 Task { await model.selectCamp(camp) }
                             }
                         }
                     } label: {
-                        HStack(spacing: 7) {
+                        HStack(spacing: 5) {
                             Text(model.selectedCamp.map { "\($0.name) · \($0.waveLabel)" } ?? "캠프 선택")
-                                .font(.headline.weight(.black))
+                                .font(.system(size: 15, weight: .black))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                                 .foregroundStyle(MaroowellTheme.ink)
                             Image(systemName: "chevron.down")
                                 .font(.caption.weight(.bold))
@@ -81,33 +90,27 @@ struct ScheduleView: View {
                         }
                     }
                 }
-                Spacer()
-                if model.isLoading || model.isSaving { ProgressView() }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(ScheduleDatePolicy.weekLabel(sunday: model.weekStart))
+                        .font(.system(size: 15, weight: .black))
+                        .foregroundStyle(MaroowellTheme.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                    Text(ScheduleDatePolicy.rangeLabel(sunday: model.weekStart))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(MaroowellTheme.muted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
 
             HStack(spacing: 8) {
                 weekButton("이전주", symbol: "chevron.left") { await model.moveWeek(by: -7) }
                 weekButton("이번주", symbol: "calendar") { await model.currentWeek() }
                 weekButton("다음주", symbol: "chevron.right") { await model.moveWeek(by: 7) }
-            }
-
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(ScheduleDatePolicy.weekLabel(sunday: model.weekStart))
-                        .font(.headline.weight(.black))
-                    Text(ScheduleDatePolicy.rangeLabel(sunday: model.weekStart))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(MaroowellTheme.muted)
-                }
-                Spacer()
-                if model.dirtyCount > 0 {
-                    Text("미저장 \(model.dirtyCount)")
-                        .font(.caption.weight(.black))
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.orange.opacity(0.12), in: Capsule())
-                }
             }
 
             actionButtons
@@ -170,10 +173,6 @@ struct ScheduleView: View {
                 .accessibilityIdentifier("schedule-meta-upload")
             }
 
-            Text("서버 저장과 메타어드민 전송은 별도입니다. 저장 후 전송 버튼을 눌러주세요.")
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(MaroowellTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
