@@ -87,7 +87,7 @@ struct NativeMetaAPI {
     private func poll(_ id: String) async throws {
         var continued = false
         for _ in 0..<120 {
-            let result = try JSONDecoder().decode(NativeMetaReply.self, from: request(path: "schedule/meta/workflow", query: [.init(name:"workflow_id",value:id)]))
+            let result = try JSONDecoder().decode(NativeMetaReply.self, from: try await request(path: "schedule/meta/workflow", query: [.init(name:"workflow_id",value:id)]))
             let status = (result.status ?? "").uppercased()
             if status == "SUCCESS" || status == "COMPLETED" { return }
             if status == "WAIT_FOR_DOWNLOAD" && !continued {
@@ -106,7 +106,7 @@ struct NativeMetaAPI {
         for index in 0..<8 {
             if index > 0 { try await Task.sleep(nanoseconds: 1_200_000_000) }
             let value = try JSONEncoder().encode(NativeMetaVerifyRequest(camp:preview.camp,wave:preview.wave,date:preview.scheduleDate,phase:phase))
-            let result = try JSONDecoder().decode(NativeMetaReply.self, from: request(path: "schedule/meta/native/verify", body:value))
+            let result = try JSONDecoder().decode(NativeMetaReply.self, from: try await request(path: "schedule/meta/native/verify", body:value))
             if result.verified == true { return }
         }
         throw ScheduleAPIError.server("META 실제 등록 검증 실패 · \(phase)")
@@ -119,7 +119,7 @@ struct NativeMetaAPI {
             if phase == "reset" && preview.resetCount == 0 { continue }
             if phase == "apply" && preview.applyCount == 0 { continue }
             let body = try JSONEncoder().encode(NativeMetaTransferRequest(camp:preview.camp,wave:preview.wave,date:preview.scheduleDate,phase:phase,fingerprint:preview.fingerprint))
-            let submitted = try JSONDecoder().decode(NativeMetaReply.self, from: request(path: "schedule/meta/native/submit",body:body))
+            let submitted = try JSONDecoder().decode(NativeMetaReply.self, from: try await request(path: "schedule/meta/native/submit",body:body))
             if let id = submitted.workflowID { try await poll(id) }
             progress("메타어드민 실제 반영 확인 중")
             try await verify(preview,phase:phase)
