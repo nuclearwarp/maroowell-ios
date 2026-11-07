@@ -1,9 +1,14 @@
 import SwiftUI
 import Foundation
+import UIKit
 
 struct NumberingView: View {
     let session: AppSession
 
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("maroowell.local.numbering.auto_waybill_clipboard") private var clipboardAutofillEnabled = true
+    @State private var waybillUserEdited = false
+    @State private var clipboardHint = "복사한 텍스트 전체가 표시됩니다. 제출할 때 운송장번호만 확인합니다."
     @State private var mode: NumberingMode = .menu
     @State private var contexts: [NumberingContext] = []
     @State private var forms: [String: GoogleFormDefinition] = [:]
@@ -50,6 +55,15 @@ struct NumberingView: View {
             if contexts.isEmpty {
                 await loadContexts()
             }
+        }
+        .onChange(of: mode) { _, newMode in
+            if newMode == .numbering { fillWaybillFromClipboard() }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active && mode == .numbering { fillWaybillFromClipboard() }
+        }
+        .onChange(of: clipboardAutofillEnabled) { _, enabled in
+            if enabled && mode == .numbering { fillWaybillFromClipboard() }
         }
         .alert(item: $activeAlert) { alert in
             switch alert {
@@ -111,6 +125,19 @@ struct NumberingView: View {
             ) {
                 Task { await loadHistory() }
             }
+
+            Toggle(isOn: $clipboardAutofillEnabled) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("운송장번호 자동 붙여넣기")
+                        .font(.subheadline.weight(.bold))
+                    Text("채번 요청에서 복사한 원문 자동 입력 · 이 기기에 설정 저장")
+                        .font(.caption)
+                        .foregroundStyle(MaroowellTheme.muted)
+                }
+            }
+            .tint(Color(red: 0.145, green: 0.388, blue: 0.922))
+            .padding(14)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
         }
     }
 
@@ -175,10 +202,23 @@ struct NumberingView: View {
             }
 
             if !returnLabel {
-                fieldCard("운송장번호") {
-                    TextField("운송장번호 994667647503 주문번호 29100092477318", text: $waybill)
-                        .keyboardType(.numbersAndPunctuation)
+                fieldCard("운송장 / 주문번호 복사 내용") {
+                    TextEditor(text: Binding(
+                        get: { waybill },
+                        set: { value in
+                            waybillUserEdited = true
+                            waybill = String(value.prefix(3000))
+                        }
+                    ))
+                    .frame(minHeight: 85)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel("운송장 / 주문번호 복사 내용")
                 }
+                Text(clipboardHint)
+                    .font(.caption)
+                    .foregroundStyle(MaroowellTheme.muted)
+                    .padding(.horizontal, 3)
 
                 fieldCard("채번 수량") {
                     TextField("수량", text: $quantity)
@@ -347,6 +387,9 @@ struct NumberingView: View {
                 loaded[group.key] = try await loadGoogleForm(rawURL)
             }
             forms = loaded
+            waybill = ""
+            waybillUserEdited = false
+            clipboardHint = "복사한 텍스트 전체가 표시됩니다. 제출할 때 운송장번호만 확인합니다."
             mode = returnLabel ? .returnLabel : .numbering
             selectedContext = 0
             syncSelectedContext(returnLabel: returnLabel)
@@ -743,6 +786,18 @@ struct NumberingView: View {
             count += 1
         }
         return count
+    }
+
+    private func fillWaybillFromClipboard() {
+        guard mode == .numbering, scenePhase == .active,
+              clipboardAutofillEnabled, !waybillUserEdited,
+              UIPasteboard.general.hasStrings else { return }
+        guard let raw = UIPasteboard.general.string,
+              !raw.isEmpty, raw.count <= 3000,
+              !NumberingClipboardPolicy.extract(raw).isEmpty,
+              raw != waybill else { return }
+        waybill = raw
+        clipboardHint = "복사된 운송장·주문번호 원문을 그대로 붙여넣었습니다."
     }
 
     private func extractWaybill(_ value: String) -> String {
