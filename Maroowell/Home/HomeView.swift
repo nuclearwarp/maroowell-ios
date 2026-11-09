@@ -380,9 +380,7 @@ struct HomeView: View {
         if session.canView(AppAccessPolicy.schedulePath) {
             items.append(.init(tab: .work, title: "입차 스케줄", subtitle: "전체 라우트 입차 일정 조회 및 관리", symbol: "calendar", destination: .schedule))
         }
-        if session.isMaroowell {
-            items.append(.init(tab: .work, title: "채번", subtitle: "채번 요청 · 반품 송장 · 월별 이력", symbol: "doc.text.fill", destination: .numbering))
-        }
+        items.append(.init(tab: .work, title: "채번", subtitle: "오늘 정규·용차 배차 기반 채번 · 반품 송장", symbol: "doc.text.fill", destination: .numbering))
 
         items.append(.init(
             tab: .work,

@@ -11,6 +11,7 @@ struct NumberingView: View {
     @State private var clipboardHint = "복사한 텍스트 전체가 표시됩니다. 제출할 때 운송장번호만 확인합니다."
     @State private var mode: NumberingMode = .menu
     @State private var contexts: [NumberingContext] = []
+    @State private var loadedContextDate: String?
     @State private var forms: [String: GoogleFormDefinition] = [:]
     @State private var history: [NumberingHistoryRow] = []
     @State private var selectedContext = 0
@@ -52,7 +53,7 @@ struct NumberingView: View {
         .navigationTitle("채번")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            if contexts.isEmpty {
+            if contexts.isEmpty || loadedContextDate != koreaToday() {
                 await loadContexts()
             }
         }
@@ -60,7 +61,16 @@ struct NumberingView: View {
             if newMode == .numbering { fillWaybillFromClipboard() }
         }
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active && mode == .numbering { fillWaybillFromClipboard() }
+            if newPhase == .active {
+                if loadedContextDate != koreaToday() {
+                    mode = .menu
+                    forms = [:]
+                    contexts = []
+                    Task { await loadContexts() }
+                } else if mode == .numbering {
+                    fillWaybillFromClipboard()
+                }
+            }
         }
         .onChange(of: clipboardAutofillEnabled) { _, enabled in
             if enabled && mode == .numbering { fillWaybillFromClipboard() }
@@ -96,7 +106,7 @@ struct NumberingView: View {
 
     private var menu: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("오늘 스케줄과 입차지 정보를 이용해 자동 입력합니다.")
+            Text("오늘 정규 스케줄과 용차 배차를 함께 조회하여 채번 정보를 자동 입력합니다.")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(MaroowellTheme.muted)
                 .padding(.horizontal, 3)
@@ -370,6 +380,14 @@ struct NumberingView: View {
     }
 
     private func openRequest(returnLabel: Bool) async {
+        guard loadedContextDate == koreaToday() else {
+            mode = .menu
+            contexts = []
+            forms = [:]
+            await loadContexts()
+            activeAlert = .error("오늘 배차를 새로 불러왔습니다. 다시 선택해주세요.")
+            return
+        }
         guard !contexts.isEmpty else {
             activeAlert = .error("오늘 등록된 입차 스케줄이 없습니다.")
             return
@@ -399,18 +417,20 @@ struct NumberingView: View {
     }
 
     private func loadContexts() async {
-        guard session.isMaroowell else { return }
+        let today = koreaToday()
         isLoading = true
         defer { isLoading = false }
 
         do {
             let response = try await client
-                .rpc("mw_my_numbering_context_v2", params: ["p_date": koreaToday()])
+                .rpc("mw_my_numbering_context_v2", params: ["p_date": today])
                 .execute()
             let rows = try JSONDecoder().decode([NumberingContext].self, from: response.data)
             contexts = rows.filter { !$0.route.isEmpty && $0.route != "휴무자" }
+            loadedContextDate = today
         } catch {
-            activeAlert = .error("오늘 입차 스케줄 조회 실패: \(error.localizedDescription)")
+            loadedContextDate = nil
+            activeAlert = .error("오늘 정규·용차 배차 조회 실패: \(error.localizedDescription)")
         }
     }
 
@@ -441,13 +461,15 @@ struct NumberingView: View {
         if let match = fuzzyMatch(ctx.deliveryLocation, options: options) {
             mobileCamp = options[match]
         } else {
-            mobileCamp = options.first ?? ""
+            // Avoid submitting an unrelated mobile camp without a verified route match.
+            mobileCamp = ""
         }
     }
 
     private func currentMobileOptions(returnLabel: Bool) -> [String] {
         guard let ctx = currentContext, let form = forms[ctx.camp] else { return [] }
-        return returnLabel ? form.returnMobileOptions : form.mobileOptions
+        let options = returnLabel ? form.returnMobileOptions : form.mobileOptions
+        return mobileCamp.isEmpty ? [""] + options : options
     }
 
     private func autoContextText(_ ctx: NumberingContext) -> String {
