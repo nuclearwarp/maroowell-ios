@@ -287,6 +287,23 @@ struct HomeCalendarView: View {
     }
 }
 
+private struct RoadNameMapRequest: Identifiable {
+    let id = UUID()
+    let camp: String
+    let routes: [String]
+
+    var path: String {
+        var components = URLComponents()
+        components.path = "/app_road_map.html"
+        components.queryItems = [
+            URLQueryItem(name: "camp", value: camp),
+            URLQueryItem(name: "routes", value: routes.joined(separator: ",")),
+            URLQueryItem(name: "source", value: camp.hasPrefix("용차") ? "dragon_car" : "maroowell")
+        ]
+        return components.string ?? "/app_road_map.html"
+    }
+}
+
 private struct HomeCalendarDaySheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var inspectionStore = InspectionStore.shared
@@ -300,6 +317,7 @@ private struct HomeCalendarDaySheet: View {
     @State private var showMemoEditor = false
     @State private var memoDraft = ""
     @State private var qrCampInfo: HomeCampQuickInfo?
+    @State private var roadMapRequest: RoadNameMapRequest?
     @State private var quickActionMessage: String?
 
     private var activeEntries: [HomePersonalScheduleEntry] { entries.filter { !$0.isOff } }
@@ -355,7 +373,8 @@ private struct HomeCalendarDaySheet: View {
                                     routes: groupRoutes(entry.routes),
                                     night: entry.wave == "WAVE1",
                                     off: false,
-                                    camp: entry.camp
+                                    camp: entry.camp,
+                                    rawRoutes: entry.routes
                                 )
                             }
                         }
@@ -466,6 +485,16 @@ private struct HomeCalendarDaySheet: View {
                 }
                 .presentationDetents([.medium, .large])
             }
+            .sheet(item: $roadMapRequest) { request in
+                NavigationStack {
+                    MaroowellWebView(title: "도로명 조회", path: request.path)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("닫기") { roadMapRequest = nil }
+                            }
+                        }
+                }
+            }
             .sheet(item: $qrCampInfo) { info in
                 NavigationStack {
                     VStack(spacing: 14) {
@@ -524,7 +553,7 @@ private struct HomeCalendarDaySheet: View {
         return MaroowellTheme.muted
     }
 
-    private func scheduleCard(title: String, routes: [String], night: Bool, off: Bool, camp: String) -> some View {
+    private func scheduleCard(title: String, routes: [String], night: Bool, off: Bool, camp: String, rawRoutes: [String] = []) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.isEmpty ? "입차" : title)
                 .font(.caption.weight(.black))
@@ -564,6 +593,24 @@ private struct HomeCalendarDaySheet: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.top, 4)
+
+                if rawRoutes.contains(where: { !$0.isEmpty && $0 != "휴무" }) {
+                    Button {
+                        roadMapRequest = RoadNameMapRequest(camp: camp, routes: rawRoutes)
+                    } label: {
+                        Label("도로명 조회", systemImage: "map.fill")
+                            .font(.subheadline.weight(.black))
+                            .foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.56))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 42)
+                            .background(Color(red: 0.88, green: 0.95, blue: 1.0), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(red: 0.62, green: 0.80, blue: 0.93))
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
