@@ -1,9 +1,8 @@
 import Foundation
-import MapKit
 import SwiftUI
 import CoreLocation
 
-/// Driver map uses native MapKit and the existing Supabase app session. No web login.
+/// In-app Kakao Maps API canvas, using the existing Supabase app session. No website login.
 struct DriverRouteMapView: View {
     let camp: String
     let routes: [String]
@@ -59,8 +58,16 @@ struct DriverRouteMapView: View {
             }
             .padding(.horizontal, 9).padding(.vertical, 6)
             ZStack(alignment: .top) {
-                DriverRouteMapKit(polygons: polygons, allAreas: store.areas)
-                    .ignoresSafeArea(edges: .bottom)
+                KakaoMapWebView(
+                    polygons: polygons.map { item in
+                        KakaoMapPolygon(
+                            id: item.id, coordinates: item.coordinates,
+                            label: item.building ? "" : item.label
+                        )
+                    },
+                    fitContent: true
+                )
+                .ignoresSafeArea(edges: .bottom)
                 VStack(spacing: 5) {
                     HStack(spacing: 6) {
                         Button("구역 \(showAreas ? "숨기기" : "표시")") { showAreas.toggle() }
@@ -150,74 +157,6 @@ private struct DriverRoutePolygon: Identifiable {
     let colorIndex: Int
     let building: Bool
 }
-private struct DriverRouteMapKit: UIViewRepresentable {
-    let polygons: [DriverRoutePolygon]
-    let allAreas: [DriverRouteArea]
-    func makeCoordinator() -> Coordinator { Coordinator() }
-    func makeUIView(context: Context) -> MKMapView {
-        let view = MKMapView(frame: .zero)
-        view.delegate = context.coordinator
-        view.showsCompass = true
-        view.isRotateEnabled = true
-        view.setRegion(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 37.5665, longitude: 126.978),
-                                          span: MKCoordinateSpan(latitudeDelta: 0.2, longitudeDelta: 0.2)), animated: false)
-        return view
-    }
-    func updateUIView(_ view: MKMapView, context: Context) {
-        let signature = polygons.map(\.id).joined(separator: "|")
-        if signature != context.coordinator.signature {
-            view.removeOverlays(view.overlays)
-            view.removeAnnotations(view.annotations.filter { !($0 is MKUserLocation) })
-            context.coordinator.colors.removeAll()
-            for model in polygons where model.coordinates.count >= 3 {
-                let poly = MKPolygon(coordinates: model.coordinates, count: model.coordinates.count)
-                poly.title = model.label
-                context.coordinator.colors[ObjectIdentifier(poly)] = (model.colorIndex, model.building)
-                view.addOverlay(poly)
-                if !model.building {
-                    let center = model.coordinates[0]
-                    let annotation = MKPointAnnotation()
-                    annotation.coordinate = center
-                    annotation.title = model.label
-                    view.addAnnotation(annotation)
-                }
-            }
-            context.coordinator.signature = signature
-        }
-        let scope = allAreas.map { $0.code + $0.camp }.joined(separator: "|")
-        if scope != context.coordinator.scope && !allAreas.isEmpty {
-            context.coordinator.scope = scope
-            let points = allAreas.flatMap(\.rings).flatMap { $0 }
-            if let minLat = points.map(\.latitude).min(),
-               let maxLat = points.map(\.latitude).max(),
-               let minLon = points.map(\.longitude).min(),
-               let maxLon = points.map(\.longitude).max() {
-                let region = MKCoordinateRegion(
-                    center: CLLocationCoordinate2D(latitude: (minLat+maxLat)/2, longitude: (minLon+maxLon)/2),
-                    span: MKCoordinateSpan(latitudeDelta: max(0.003,(maxLat-minLat)*1.3),
-                                           longitudeDelta: max(0.003,(maxLon-minLon)*1.3)))
-                view.setRegion(region, animated: true)
-            }
-        }
-    }
-    final class Coordinator: NSObject, MKMapViewDelegate {
-        var signature = ""
-        var scope = ""
-        var colors: [ObjectIdentifier: (Int,Bool)] = [:]
-        private let palette: [UIColor] = [.systemBlue,.systemTeal,.systemPurple,.systemOrange,.systemRed,.systemIndigo,.systemGreen]
-        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            let renderer = MKPolygonRenderer(overlay: overlay)
-            let index = colors[ObjectIdentifier(overlay)]?.0 ?? 0
-            let building = colors[ObjectIdentifier(overlay)]?.1 ?? false
-            let color = palette[index % palette.count]
-            renderer.strokeColor = color.withAlphaComponent(0.9)
-            renderer.fillColor = color.withAlphaComponent(building ? 0.28 : 0.14)
-            renderer.lineWidth = building ? 1.4 : 2.3
-            return renderer
-        }
-    }
-}
-
 private struct DriverRouteArea {
     let code: String
     let camp: String
