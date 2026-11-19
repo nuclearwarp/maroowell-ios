@@ -8,13 +8,18 @@ struct KakaoMapPolygon: Identifiable {
     let label: String
     let selected: Bool
     let draft: Bool
+    let fillColor: String?
+    let strokeColor: String?
 
-    init(id: String, coordinates: [CLLocationCoordinate2D], label: String = "", selected: Bool = false, draft: Bool = false) {
+    init(id: String, coordinates: [CLLocationCoordinate2D], label: String = "", selected: Bool = false, draft: Bool = false,
+         fillColor: String? = nil, strokeColor: String? = nil) {
         self.id = id
         self.coordinates = coordinates
         self.label = label
         self.selected = selected
         self.draft = draft
+        self.fillColor = fillColor
+        self.strokeColor = strokeColor
     }
 }
 
@@ -171,6 +176,8 @@ struct KakaoMapWebView: UIViewRepresentable {
                         "label": polygon.label,
                         "selected": polygon.selected,
                         "draft": polygon.draft,
+                        "fillColor": polygon.fillColor ?? NSNull(),
+                        "strokeColor": polygon.strokeColor ?? NSNull(),
                         "points": polygon.coordinates.map { [$0.latitude, $0.longitude] }
                     ]
                 },
@@ -294,8 +301,12 @@ window.mwRender=function(payload,enableDrawing,fit,focus,serial){
   (payload.polygons||[]).forEach((item,index)=>{
     const path=(item.points||[]).map(p=>new kakao.maps.LatLng(Number(p[0]),Number(p[1])));
     if(path.length<2)return;
-    const color=item.draft?'#f59e0b':(item.selected?'#7c3aed':'#2563eb');
-    const polygon=addObject(new kakao.maps.Polygon({map:map,path:path,strokeWeight:item.draft?3:2,strokeColor:color,strokeOpacity:.9,fillColor:color,fillOpacity:item.draft?.22:.13}));
+    // Road colors are derived from the name, not a feature index.
+    const defaultColor=item.draft?'#f59e0b':(item.selected?'#7c3aed':'#2563eb');
+    const stroke=/^#[0-9a-f]{6}$/i.test(item.strokeColor||'')?item.strokeColor:defaultColor;
+    const fill=/^#[0-9a-f]{6}$/i.test(item.fillColor||'')?item.fillColor:defaultColor;
+    const opacity=item.fillColor ? .75 : (item.draft ? .22 : .13);
+    const polygon=addObject(new kakao.maps.Polygon({map:map,path:path,strokeWeight:item.draft?3:2,strokeColor:stroke,strokeOpacity:.94,fillColor:fill,fillOpacity:opacity}));
     path.forEach(p=>{bounds.extend(p);count++});
     if(item.label){
       const center=centroid(path);
