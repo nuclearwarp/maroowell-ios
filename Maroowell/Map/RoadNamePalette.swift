@@ -48,6 +48,12 @@ enum RoadNamePalette {
             .replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
     }
 
+    /// Match normalized full road names, never a prefix such as 도림로 vs 도림로36길.
+    static func isExactRoad(_ left: String, _ right: String) -> Bool {
+        let target = canonicalRoad(right)
+        return !target.isEmpty && canonicalRoad(left) == target
+    }
+
     static func forRoad(_ roadName: String) -> Colors {
         let road = canonicalRoad(roadName)
         if road.isEmpty || road == "도로명미확인" { return unknown }
