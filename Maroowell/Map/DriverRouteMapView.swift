@@ -15,10 +15,22 @@ struct DriverRouteMapView: View {
     @State private var showLegend = false
     @State private var selectedRoad: String? = nil
 
+    private static func roadColor(_ road: String) -> Color {
+        let hex = RoadNamePalette.forRoad(road).stroke
+        let numeric = UInt32(hex.dropFirst(), radix: 16) ?? 0x334155
+        return Color(
+            .sRGB,
+            red: Double((numeric >> 16) & 255) / 255,
+            green: Double((numeric >> 8) & 255) / 255,
+            blue: Double(numeric & 255) / 255,
+            opacity: 1
+        )
+    }
+
     private var roadGroups: [(name: String, count: Int)] {
-        Dictionary(grouping: store.buildings, by: \.road)
+        Dictionary(grouping: store.buildings, by: { RoadNamePalette.canonicalRoad($0.road) })
             .map { (name: $0.key, count: $0.value.count) }
-            .sorted { $0.count == $1.count ? $0.name < $1.name : $0.count > $1.count }
+            .sorted { $0.name.compare($1.name, options: [], range: nil, locale: Locale(identifier: "ko_KR")) == .orderedAscending }
     }
 
     private var polygons: [DriverRoutePolygon] {
@@ -33,11 +45,14 @@ struct DriverRouteMapView: View {
         }
         if showBuildings {
             for (index, group) in roadGroups.enumerated() where selectedRoad == nil || selectedRoad == group.name {
-                for (buildingIndex, building) in store.buildings.enumerated() where building.road == group.name {
+                for (buildingIndex, building) in store.buildings.enumerated()
+                    where RoadNamePalette.canonicalRoad(building.road) == group.name {
                     for (ringIndex, ring) in building.rings.enumerated() {
                         result.append(.init(id: "building-\(buildingIndex)-\(ringIndex)",
                                             label: group.name, coordinates: ring,
-                                            colorIndex: index, building: true))
+                                            colorIndex: index, building: true,
+                                            fillColor: RoadNamePalette.forRoad(group.name).fill,
+                                            strokeColor: RoadNamePalette.forRoad(group.name).stroke))
                     }
                 }
             }
@@ -62,7 +77,8 @@ struct DriverRouteMapView: View {
                     polygons: polygons.map { item in
                         KakaoMapPolygon(
                             id: item.id, coordinates: item.coordinates,
-                            label: item.building ? "" : item.label
+                            label: item.building ? "" : item.label,
+                            fillColor: item.fillColor, strokeColor: item.strokeColor
                         )
                     },
                     fitContent: true
@@ -108,9 +124,12 @@ struct DriverRouteMapView: View {
                                             Spacer(minLength: 3)
                                             Text("\(group.count)").monospacedDigit()
                                         }
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(selectedRoad == group.name ? .blue : .primary)
-                                        .padding(7)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(selectedRoad == group.name
+                                            ? Color.blue
+                                            : Self.roadColor(group.name))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 5)
                                         .background(Color.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 8))
                                     }
                                     .buttonStyle(.plain)
@@ -156,6 +175,8 @@ private struct DriverRoutePolygon: Identifiable {
     let coordinates: [CLLocationCoordinate2D]
     let colorIndex: Int
     let building: Bool
+    var fillColor: String? = nil
+    var strokeColor: String? = nil
 }
 private struct DriverRouteArea {
     let code: String
