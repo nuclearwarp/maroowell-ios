@@ -488,7 +488,7 @@ private struct HomeCalendarDaySheet: View {
             }
             .sheet(item: $roadMapRequest) { request in
                 NavigationStack {
-                    MaroowellWebView(title: "도로명 조회", path: request.path)
+                    DriverRouteMapView(camp: request.camp, routes: request.routes, dragon: request.camp.hasPrefix("용차"))
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
                                 Button("닫기") { roadMapRequest = nil }
@@ -599,7 +599,7 @@ private struct HomeCalendarDaySheet: View {
                     Button {
                         roadMapRequest = RoadNameMapRequest(camp: camp, routes: rawRoutes)
                     } label: {
-                        Label("도로명 조회", systemImage: "map.fill")
+                        Label("지도 조회", systemImage: "map.fill")
                             .font(.subheadline.weight(.black))
                             .foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.56))
                             .frame(maxWidth: .infinity)
