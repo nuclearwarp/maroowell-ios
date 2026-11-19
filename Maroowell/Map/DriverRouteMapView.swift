@@ -53,7 +53,7 @@ struct DriverRouteMapView: View {
             }
         }
         if showBuildings {
-            for (index, group) in roadGroups.enumerated() where selectedRoad == nil || RoadNamePalette.isExactRoad(selectedRoad, group.name) {
+            for (index, group) in roadGroups.enumerated() where selectedRoad.map { RoadNamePalette.isExactRoad($0, group.name) } ?? true {
                 for (buildingIndex, building) in store.buildings.enumerated()
                     where RoadNamePalette.isExactRoad(building.road, group.name) {
                     for (ringIndex, ring) in building.rings.enumerated() {
@@ -92,6 +92,7 @@ struct DriverRouteMapView: View {
                     if showBuildings {
                         showBuildings = false
                         showLegend = false
+                        selectedRoad = nil
                     } else {
                         showBuildings = true
                         showLegend = true
