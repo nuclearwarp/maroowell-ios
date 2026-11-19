@@ -8,8 +8,8 @@ struct DriverRouteMapView: View {
     let routes: [String]
     let dragon: Bool
     @StateObject private var store = DriverRouteMapStore()
-    @State private var campText = ""
-    @State private var routesText = ""
+    @State private var showSatellite = false
+    @State private var showRoadview = false
     @State private var showAreas = true
     @State private var showBuildings = false
     @State private var showLegend = false
@@ -62,16 +62,35 @@ struct DriverRouteMapView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 7) {
-                TextField("캠프", text: $campText).textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: .infinity)
-                TextField("126B", text: $routesText).textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled().textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: .infinity)
-                Button("조회") { Task { await search() } }
-                    .buttonStyle(.borderedProminent)
+            HStack(spacing: 5) {
+                Button(showAreas ? "구역 숨기기" : "구역 표시") { showAreas.toggle() }
+                Button(showBuildings ? "건물 숨기기" : "건물 보기") {
+                    if showBuildings {
+                        showBuildings = false
+                        showLegend = false
+                    } else {
+                        showBuildings = true
+                        showLegend = true
+                        if store.buildings.isEmpty { Task { await store.loadBuildings() } }
+                    }
+                }
+                Button(showSatellite ? "일반" : "위성") { showSatellite.toggle() }
+                Button(showRoadview ? "로드뷰 종료" : "로드뷰") { showRoadview.toggle() }
             }
-            .padding(.horizontal, 9).padding(.vertical, 6)
+            .font(.system(size: 10, weight: .semibold))
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            HStack(spacing: 5) {
+                Text(camp)
+                Text(routes.joined(separator: ", "))
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
             ZStack(alignment: .top) {
                 KakaoMapWebView(
                     polygons: polygons.map { item in
@@ -81,29 +100,12 @@ struct DriverRouteMapView: View {
                             fillColor: item.fillColor, strokeColor: item.strokeColor
                         )
                     },
-                    fitContent: true
+                    satelliteEnabled: showSatellite,
+                    roadviewEnabled: showRoadview,
+                    fitContent: !showBuildings
                 )
                 .ignoresSafeArea(edges: .bottom)
-                VStack(spacing: 5) {
-                    HStack(spacing: 6) {
-                        Button("구역 \(showAreas ? "숨기기" : "표시")") { showAreas.toggle() }
-                        Button(showBuildings ? "건물 숨기기" : "도로명별 건물") {
-                            if showBuildings {
-                                showBuildings = false
-                                showLegend = false
-                            } else {
-                                showBuildings = true
-                                showLegend = true
-                                if store.buildings.isEmpty { Task { await store.loadBuildings() } }
-                            }
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .padding(.horizontal, 9).padding(.top, 7)
-                    Spacer()
-                }
+
                 if showBuildings && showLegend {
                     VStack(spacing: 5) {
                         HStack {
@@ -138,7 +140,7 @@ struct DriverRouteMapView: View {
                         }
                     }
                     .padding(8)
-                    .frame(maxWidth: 245, maxHeight: 280)
+                    .frame(maxWidth: 225, maxHeight: 265)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     .padding(.leading, 8).padding(.bottom, 12)
@@ -155,8 +157,6 @@ struct DriverRouteMapView: View {
         .navigationTitle("지도 조회")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            if campText.isEmpty { campText = camp }
-            if routesText.isEmpty { routesText = routes.joined(separator: ",") }
             if store.areas.isEmpty { Task { await search() } }
         }
     }
@@ -165,7 +165,7 @@ struct DriverRouteMapView: View {
         showBuildings = false
         showLegend = false
         selectedRoad = nil
-        await store.load(camp: campText, prefixes: routesText.components(separatedBy: CharacterSet(charactersIn: ", \n\t")).filter { !$0.isEmpty }, dragon: dragon)
+        await store.load(camp: camp, prefixes: routes, dragon: dragon)
     }
 }
 
