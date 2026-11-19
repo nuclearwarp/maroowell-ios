@@ -15,6 +15,14 @@ struct DriverRouteMapView: View {
     @State private var showLegend = false
     @State private var selectedRoad: String? = nil
 
+    private static func roadFill(_ road: String) -> Color {
+        let hex = RoadNamePalette.forRoad(road).fill
+        let numeric = UInt32(hex.dropFirst(), radix: 16) ?? 0xD4DBE2
+        return Color(.sRGB, red: Double((numeric >> 16) & 255) / 255,
+                     green: Double((numeric >> 8) & 255) / 255,
+                     blue: Double(numeric & 255) / 255, opacity: 1)
+    }
+
     private static func roadColor(_ road: String) -> Color {
         let hex = RoadNamePalette.forRoad(road).stroke
         let numeric = UInt32(hex.dropFirst(), radix: 16) ?? 0x334155
@@ -121,10 +129,16 @@ struct DriverRouteMapView: View {
                                     Button {
                                         selectedRoad = selectedRoad == group.name ? nil : group.name
                                     } label: {
-                                        HStack {
-                                            Text(group.name).lineLimit(1)
-                                            Spacer(minLength: 3)
-                                            Text("\(group.count)").monospacedDigit()
+                                        HStack(spacing: 6) {
+                                            RoundedRectangle(cornerRadius: 2)
+                                                .fill(Self.roadFill(group.name))
+                                                .frame(width: 11, height: 11)
+                                            Text(group.name)
+                                                .lineLimit(1)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                            Text("\(group.count)")
+                                                .monospacedDigit()
+                                                .frame(minWidth: 20, alignment: .trailing)
                                         }
                                         .font(.system(size: 11, weight: .semibold))
                                         .foregroundStyle(selectedRoad == group.name
