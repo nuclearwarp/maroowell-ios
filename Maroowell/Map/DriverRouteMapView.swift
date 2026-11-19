@@ -291,8 +291,10 @@ private final class DriverRouteMapStore: ObservableObject {
                         guard !id.isEmpty, let geometry = Self.geometry(feature["geometry"]) else { continue }
                         let rings = Self.rings(geometry)
                         guard !rings.isEmpty else { continue }
-                        let road = (props["street_name"] as? String ?? props["streetName"] as? String ?? "도로명 미확인")
-                            .replacingOccurrences(of: " ", with: "")
+                        let street = (props["street_name"] as? String ?? props["streetName"] as? String ?? "도로명 미확인")
+                        let road = RoadNamePalette.canonicalRoad(street.replacingOccurrences(
+                            of: #"(?<=[길로])\s*\d+(?:-\d+)?$"#, with: "", options: .regularExpression))
+
                         result[id] = DriverRouteBuilding(id: id, road: road, rings: rings)
                     }
                     if request["hasMore"] as? Bool != true || features.isEmpty { break }
