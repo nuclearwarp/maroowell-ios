@@ -70,9 +70,24 @@ struct DriverRouteMapView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 5) {
-                Button(showAreas ? "구역 숨기기" : "구역 표시") { showAreas.toggle() }
-                Button(showBuildings ? "건물 숨기기" : "건물 보기") {
+            // Same header as "지도 조회"; controls align to the right.
+            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("지도 조회")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Color(red: 0.10, green: 0.20, blue: 0.30))
+                    Text(camp + " · " + routes.joined(separator: ", "))
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(Color(red: 0.39, green: 0.50, blue: 0.61))
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button(showAreas ? "폴리곤 숨기기" : "폴리곤 표시") {
+                    showAreas.toggle()
+                }
+                .frame(width: 98, height: 36)
+                .mapHeaderButton()
+                Button(showBuildings ? "도로명 숨기기" : "도로명 확인") {
                     if showBuildings {
                         showBuildings = false
                         showLegend = false
@@ -82,24 +97,14 @@ struct DriverRouteMapView: View {
                         if store.buildings.isEmpty { Task { await store.loadBuildings() } }
                     }
                 }
-                Button(showSatellite ? "일반" : "위성") { showSatellite.toggle() }
-                Button(showRoadview ? "로드뷰 종료" : "로드뷰") { showRoadview.toggle() }
+                .frame(width: 85, height: 36)
+                .mapHeaderButton()
             }
-            .font(.system(size: 10, weight: .semibold))
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            HStack(spacing: 5) {
-                Text(camp)
-                Text(routes.joined(separator: ", "))
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            ZStack(alignment: .top) {
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color.white)
+
+            ZStack(alignment: .topTrailing) {
                 KakaoMapWebView(
                     polygons: polygons.map { item in
                         KakaoMapPolygon(
@@ -113,6 +118,17 @@ struct DriverRouteMapView: View {
                     fitContent: !showBuildings
                 )
                 .ignoresSafeArea(edges: .bottom)
+
+                HStack(spacing: 6) {
+                    Button(showSatellite ? "일반" : "위성") { showSatellite.toggle() }
+                        .frame(width: 70, height: 40)
+                        .mapFloatingButton()
+                    Button(showRoadview ? "로드뷰 종료" : "로드뷰") { showRoadview.toggle() }
+                        .frame(width: 92, height: 40)
+                        .mapFloatingButton()
+                }
+                .padding(.top, 10)
+                .padding(.trailing, 10)
 
                 if showBuildings && showLegend {
                     VStack(spacing: 5) {
@@ -168,7 +184,9 @@ struct DriverRouteMapView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 4)
         }
-        .navigationTitle("지도 조회")
+        .navigationTitle("")
+        .toolbarBackground(Color.white, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if store.areas.isEmpty { Task { await search() } }
@@ -181,6 +199,42 @@ struct DriverRouteMapView: View {
         selectedRoad = nil
         await store.load(camp: camp, prefixes: routes, dragon: dragon)
     }
+}
+
+private struct MapHeaderButton: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Color(red: 0.09, green: 0.39, blue: 0.61))
+            .background(
+                RoundedRectangle(cornerRadius: 11)
+                    .fill(Color(red: 0.93, green: 0.97, blue: 1.0))
+                    .overlay(RoundedRectangle(cornerRadius: 11)
+                        .stroke(Color(red: 0.70, green: 0.85, blue: 0.95), lineWidth: 1))
+            )
+            .buttonStyle(.plain)
+    }
+}
+
+private struct MapFloatingButton: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(Color(red: 0.14, green: 0.25, blue: 0.36))
+            .background(
+                RoundedRectangle(cornerRadius: 11)
+                    .fill(Color.white)
+                    .overlay(RoundedRectangle(cornerRadius: 11)
+                        .stroke(Color(red: 0.82, green: 0.88, blue: 0.93), lineWidth: 1))
+            )
+            .shadow(color: .black.opacity(0.12), radius: 3, y: 2)
+            .buttonStyle(.plain)
+    }
+}
+
+private extension View {
+    func mapHeaderButton() -> some View { modifier(MapHeaderButton()) }
+    func mapFloatingButton() -> some View { modifier(MapFloatingButton()) }
 }
 
 private struct DriverRoutePolygon: Identifiable {
