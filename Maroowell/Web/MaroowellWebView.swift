@@ -16,6 +16,14 @@ struct MaroowellWebView: View {
     }
 
     private static func isNative(_ raw: String) -> Bool {
+        // Driver's read-only route viewer must use the complete web map renderer,
+        // not the native route-editor workspace.
+        if AppAccessPolicy.basePath(raw) == "/coupangRouteMap.html",
+           URLComponents(string: "https://maroowell.com" + raw)?.queryItems?.contains(where: {
+               $0.name == "mw_app" && $0.value == "1"
+           }) == true {
+            return false
+        }
         switch AppAccessPolicy.basePath(raw) {
         case "/zipcode_search", "/coupangRouteMap.html", "/coupang_camp_map", "/coupang_freshbag",
              "/cleansing_history", "/maroowell_route_info", "/maroowell_route", "/dragon_car_index",
