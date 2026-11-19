@@ -43,7 +43,8 @@ struct DriverRouteMapView: View {
 
     private var polygons: [DriverRoutePolygon] {
         var result: [DriverRoutePolygon] = []
-        if showAreas {
+        // Selecting a road hides unrelated route polygons as well as other buildings.
+        if showAreas && selectedRoad == nil {
             for (index, area) in store.areas.enumerated() {
                 for (ringIndex, ring) in area.rings.enumerated() {
                     result.append(.init(id: "area-\(index)-\(ringIndex)", label: area.code,
@@ -52,9 +53,9 @@ struct DriverRouteMapView: View {
             }
         }
         if showBuildings {
-            for (index, group) in roadGroups.enumerated() where selectedRoad == nil || selectedRoad == group.name {
+            for (index, group) in roadGroups.enumerated() where selectedRoad == nil || RoadNamePalette.isExactRoad(selectedRoad, group.name) {
                 for (buildingIndex, building) in store.buildings.enumerated()
-                    where RoadNamePalette.canonicalRoad(building.road) == group.name {
+                    where RoadNamePalette.isExactRoad(building.road, group.name) {
                     for (ringIndex, ring) in building.rings.enumerated() {
                         result.append(.init(id: "building-\(buildingIndex)-\(ringIndex)",
                                             label: group.name, coordinates: ring,
@@ -85,7 +86,7 @@ struct DriverRouteMapView: View {
                 Button(showAreas ? "폴리곤 숨기기" : "폴리곤 표시") {
                     showAreas.toggle()
                 }
-                .frame(width: 98, height: 36)
+                .frame(width: 94, height: 34)
                 .mapHeaderButton()
                 Button(showBuildings ? "도로명 숨기기" : "도로명 확인") {
                     if showBuildings {
@@ -97,7 +98,7 @@ struct DriverRouteMapView: View {
                         if store.buildings.isEmpty { Task { await store.loadBuildings() } }
                     }
                 }
-                .frame(width: 85, height: 36)
+                .frame(width: 81, height: 34)
                 .mapHeaderButton()
             }
             .padding(.horizontal, 8)
@@ -121,10 +122,10 @@ struct DriverRouteMapView: View {
 
                 HStack(spacing: 6) {
                     Button(showSatellite ? "일반" : "위성") { showSatellite.toggle() }
-                        .frame(width: 70, height: 40)
+                        .frame(width: 60, height: 35)
                         .mapFloatingButton()
                     Button(showRoadview ? "로드뷰 종료" : "로드뷰") { showRoadview.toggle() }
-                        .frame(width: 92, height: 40)
+                        .frame(width: 83, height: 35)
                         .mapFloatingButton()
                 }
                 .padding(.top, 10)
@@ -132,45 +133,61 @@ struct DriverRouteMapView: View {
 
                 if showBuildings && showLegend {
                     VStack(spacing: 5) {
-                        HStack {
-                            Text("도로명별 건물").font(.caption.weight(.bold))
-                            Spacer(minLength: 4)
-                            Button("선택 해제") { selectedRoad = nil }.font(.caption2)
-                            Button("숨기기") { showLegend = false }.font(.caption2)
+                        HStack(spacing: 4) {
+                            Text("도로명별")
+                                .font(.system(size: 11.5, weight: .bold))
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                            Button("선택 해제") { selectedRoad = nil }
+                                .font(.system(size: 9.5, weight: .semibold))
+                                .disabled(selectedRoad == nil)
+                                .buttonStyle(.bordered)
+                                .controlSize(.mini)
                         }
                         Divider()
                         ScrollView {
-                            LazyVStack(spacing: 4) {
+                            LazyVStack(spacing: 3) {
                                 ForEach(roadGroups, id: \.name) { group in
+                                    let active = selectedRoad == group.name
                                     Button {
-                                        selectedRoad = selectedRoad == group.name ? nil : group.name
+                                        selectedRoad = active ? nil : group.name
                                     } label: {
-                                        HStack(spacing: 6) {
+                                        HStack(spacing: 5) {
                                             RoundedRectangle(cornerRadius: 2)
                                                 .fill(Self.roadFill(group.name))
-                                                .frame(width: 11, height: 11)
+                                                .frame(width: 10, height: 10)
                                             Text(group.name)
                                                 .lineLimit(1)
+                                                .truncationMode(.tail)
                                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                            Text("\(group.count)")
+                                            Text("\(group.count)개")
                                                 .monospacedDigit()
-                                                .frame(minWidth: 20, alignment: .trailing)
+                                                .fixedSize()
                                         }
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(selectedRoad == group.name
-                                            ? Color.blue
+                                        .font(.system(size: 11.5, weight: active ? .bold : .semibold))
+                                        .foregroundStyle(active
+                                            ? Color(red: 0.08, green: 0.32, blue: 0.63)
                                             : Self.roadColor(group.name))
                                         .padding(.horizontal, 5)
-                                        .padding(.vertical, 5)
-                                        .background(Color.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 8))
+                                        .padding(.vertical, 7)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 7)
+                                                .fill(active ? Color(red: 0.87, green: 0.93, blue: 1.0) : Color.white.opacity(0.9))
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 7)
+                                                .stroke(active ? Color.blue : Color.gray.opacity(0.18),
+                                                        lineWidth: active ? 2 : 1)
+                                        )
                                     }
+                                    .accessibilityLabel("\(group.name), \(group.count)개" + (active ? ", 선택됨" : ""))
                                     .buttonStyle(.plain)
                                 }
                             }
                         }
                     }
-                    .padding(8)
-                    .frame(maxWidth: 225, maxHeight: 265)
+                    .padding(7)
+                    .frame(width: 136, height: 265)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     .padding(.leading, 8).padding(.bottom, 12)
@@ -204,7 +221,7 @@ struct DriverRouteMapView: View {
 private struct MapHeaderButton: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(.system(size: 10, weight: .bold))
+            .font(.system(size: 10.5, weight: .bold))
             .foregroundStyle(Color(red: 0.09, green: 0.39, blue: 0.61))
             .background(
                 RoundedRectangle(cornerRadius: 11)
