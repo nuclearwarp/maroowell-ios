@@ -294,13 +294,14 @@ private struct RoadNameMapRequest: Identifiable {
 
     var path: String {
         var components = URLComponents()
-        components.path = "/app_road_map.html"
+        components.path = "/coupangRouteMap.html"
         components.queryItems = [
+            URLQueryItem(name: "mw_app", value: "1"),
             URLQueryItem(name: "camp", value: camp),
             URLQueryItem(name: "routes", value: routes.joined(separator: ",")),
             URLQueryItem(name: "source", value: camp.hasPrefix("용차") ? "dragon_car" : "maroowell")
         ]
-        return components.string ?? "/app_road_map.html"
+        return components.string ?? "/coupangRouteMap.html?mw_app=1"
     }
 }
 
