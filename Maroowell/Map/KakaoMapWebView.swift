@@ -70,6 +70,8 @@ struct KakaoMapWebView: UIViewRepresentable {
     let markers: [KakaoMapMarker]
     let addresses: [KakaoMapAddress]
     let drawingEnabled: Bool
+    let satelliteEnabled: Bool
+    let roadviewEnabled: Bool
     let fitContent: Bool
     let focusMarkerID: String?
     let onMapTap: ((CLLocationCoordinate2D) -> Void)?
@@ -80,6 +82,8 @@ struct KakaoMapWebView: UIViewRepresentable {
         markers: [KakaoMapMarker] = [],
         addresses: [KakaoMapAddress] = [],
         drawingEnabled: Bool = false,
+        satelliteEnabled: Bool = false,
+        roadviewEnabled: Bool = false,
         fitContent: Bool = true,
         focusMarkerID: String? = nil,
         onMapTap: ((CLLocationCoordinate2D) -> Void)? = nil,
@@ -89,6 +93,8 @@ struct KakaoMapWebView: UIViewRepresentable {
         self.markers = markers
         self.addresses = addresses
         self.drawingEnabled = drawingEnabled
+        self.satelliteEnabled = satelliteEnabled
+        self.roadviewEnabled = roadviewEnabled
         self.fitContent = fitContent
         self.focusMarkerID = focusMarkerID
         self.onMapTap = onMapTap
@@ -207,7 +213,7 @@ struct KakaoMapWebView: UIViewRepresentable {
             guard let data = try? JSONSerialization.data(withJSONObject: payload),
                   let json = String(data: data, encoding: .utf8) else { return }
             let focus = parent.focusMarkerID.map(Self.jsQuoted) ?? "null"
-            let script = "window.mwRender(\(json), \(parent.drawingEnabled ? "true" : "false"), \(parent.fitContent ? "true" : "false"), \(focus), \(renderSerial));"
+            let script = "window.mwRender(\(json), \(parent.drawingEnabled ? "true" : "false"), \(parent.fitContent ? "true" : "false"), \(focus), \(renderSerial)); window.mwSetSatellite(\(parent.satelliteEnabled ? "true" : "false")); window.mwSetRoadview(\(parent.roadviewEnabled ? "true" : "false"));"
             webView.evaluateJavaScript(script)
         }
 
@@ -248,7 +254,14 @@ struct KakaoMapWebView: UIViewRepresentable {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<style>html,body,#map{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#eef3f8}
+<style>html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#eef3f8}
+#map{position:absolute;top:0;left:0;width:100%;height:100%}
+#roadview{position:absolute;bottom:0;left:0;width:100%;height:50%;display:none;background:#e2e8f0}
+body.mw-roadview-open #map{height:50%}
+body.mw-roadview-open #roadview{display:block}
+#mwRoadviewHint{display:none;position:absolute;z-index:8;left:7px;top:7px;background:#ffffffed;color:#315171;
+border:1px solid #bcd0db;border-radius:7px;padding:5px 9px;font:700 11px -apple-system,sans-serif;pointer-events:none}
+body.mw-roadview-open #mwRoadviewHint{display:block}
 .mw-label{padding:4px 7px;border-radius:7px;background:rgba(255,255,255,.96);color:#1e3a8a;
 border:1px solid #93c5fd;font:800 10.5px -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;
 white-space:nowrap;box-shadow:0 1px 5px rgba(15,23,42,.18);transform:translateY(-3px)}
@@ -261,6 +274,8 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 8px r
 </head>
 <body>
 <div id="map"></div>
+<div id="roadview"></div>
+<div id="mwRoadviewHint">지도에서 도로를 눌러 로드뷰 위치를 선택하세요</div>
 <script>
 let map=null, geocoder=null, drawing=false, objects=[], markerIndex={};
 function bridge(message){try{window.webkit.messageHandlers.mapBridge.postMessage(message)}catch(e){}}
@@ -329,6 +344,73 @@ window.mwRender=function(payload,enableDrawing,fit,focus,serial){
     });
   });
 };
+// Same Kakao Roadview/map orientation walker used by coupangRouteMap.
+let roadview=null,roadClient=null,roadWalker=null,roadClick=null,roadviewOn=false;
+function ensureRoadview(){
+  if(roadview)return;
+  roadview=new kakao.maps.Roadview(document.getElementById('roadview'));
+  roadClient=new kakao.maps.RoadviewClient();
+  const root=document.createElement('div');
+  root.style.cssText='position:relative;width:46px;height:46px;pointer-events:none;filter:drop-shadow(0 2px 3px #0f172a55)';
+  const cone=document.createElement('div');
+  cone.style.cssText='position:absolute;left:50%;top:-21px;width:25px;height:32px;transform:translateX(-50%);transform-origin:50% 37px;background:#2563eb7a;clip-path:polygon(50% 0,100% 100%,50% 77%,0 100%)';
+  const halo=document.createElement('div');
+  halo.style.cssText='position:absolute;left:50%;top:50%;width:30px;height:30px;transform:translate(-50%,-50%);border-radius:50%;background:#2563eb29;border:2px solid #2563ebb8';
+  const dot=document.createElement('div');
+  dot.style.cssText='position:absolute;left:50%;top:50%;width:12px;height:12px;transform:translate(-50%,-50%);border-radius:50%;background:#2563eb;border:3px solid white';
+  root.append(cone,halo,dot);
+  roadWalker=new kakao.maps.CustomOverlay({content:root,position:map.getCenter(),xAnchor:.5,yAnchor:.5,zIndex:99});
+  function sync(){
+    const pos=roadview.getPosition&&roadview.getPosition();
+    if(pos)roadWalker.setPosition(pos);
+    const point=roadview.getViewpoint&&roadview.getViewpoint();
+    if(point)cone.style.transform='translateX(-50%) rotate('+Number(point.pan||0)+'deg)';
+    if(roadviewOn)roadWalker.setMap(map);
+  }
+  kakao.maps.event.addListener(roadview,'init',sync);
+  kakao.maps.event.addListener(roadview,'viewpoint_changed',sync);
+  kakao.maps.event.addListener(roadview,'position_changed',sync);
+}
+function openRoadview(position){
+  ensureRoadview();
+  roadClient.getNearestPanoId(position,200,function(id){
+    if(!roadviewOn)return;
+    if(!id){document.getElementById('mwRoadviewHint').textContent='근처에 로드뷰가 없습니다. 다른 도로를 눌러주세요.';return;}
+    roadview.setPanoId(id,position);
+    document.getElementById('mwRoadviewHint').textContent='상단 방향 표시와 하단 로드뷰가 연동됩니다';
+  });
+}
+window.mwSetSatellite=function(on){
+  if(!map)return;
+  map.setMapTypeId(on?kakao.maps.MapTypeId.HYBRID:kakao.maps.MapTypeId.ROADMAP);
+};
+window.mwSetRoadview=function(on){
+  if(!map)return;
+  const next=!!on;
+  if(roadviewOn===next)return;
+  roadviewOn=next;
+  document.body.classList.toggle('mw-roadview-open',next);
+  if(next){
+    ensureRoadview();
+    try{map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW)}catch(e){}
+    roadWalker.setMap(map);
+    if(!roadClick){
+      roadClick=function(e){if(e&&e.latLng)openRoadview(e.latLng);};
+      kakao.maps.event.addListener(map,'click',roadClick);
+    }
+    requestAnimationFrame(function(){
+      map.relayout();
+      if(roadview.relayout)roadview.relayout();
+      openRoadview(map.getCenter());
+    });
+  }else{
+    try{map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW)}catch(e){}
+    if(roadClick){kakao.maps.event.removeListener(map,'click',roadClick);roadClick=null;}
+    if(roadWalker)roadWalker.setMap(null);
+    requestAnimationFrame(function(){map.relayout();});
+  }
+};
+
 kakao.maps.load(function(){
   const container=document.getElementById('map');
   map=new kakao.maps.Map(container,{center:new kakao.maps.LatLng(37.5665,126.9780),level:7});
