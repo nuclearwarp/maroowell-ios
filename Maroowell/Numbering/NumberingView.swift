@@ -456,7 +456,7 @@ struct NumberingView: View {
 
     private func syncSelectedContext(returnLabel: Bool) {
         guard let ctx = currentContext, let form = forms[ctx.camp] else { return }
-        driverID = (!returnLabel && form.driverIsName) ? ctx.driverName : ctx.coupangID
+        driverID = ((returnLabel && form.returnIsName) || (!returnLabel && form.driverIsName)) ? ctx.driverName : ctx.coupangID
         let options = returnLabel ? form.returnMobileOptions : form.mobileOptions
         let hasMobile = returnLabel ? form.returnMobileEntry != nil : form.mobileEntry != nil
         if !hasMobile {
@@ -551,7 +551,7 @@ struct NumberingView: View {
             let payload = NumberingInsertRow(
                 maroowellInfoID: ctx.infoID,
                 driverName: ctx.driverName,
-                coupangID: (!returnLabel && form.driverIsName) ? ctx.coupangID : driverID,
+                coupangID: ((returnLabel && form.returnIsName) || (!returnLabel && form.driverIsName)) ? ctx.coupangID : driverID,
                 requestType: returnLabel ? "return_label" : "numbering",
                 waybillNo: returnLabel ? nil : extractWaybill(waybill),
                 quantity: returnLabel ? nil : Int(quantity),
@@ -632,7 +632,7 @@ struct NumberingView: View {
             let k = key(q.title)
             return k.contains("아이디") || k.contains("기사ID") ||
                 k.contains("기사님계정") || k.contains("[채번]기사님이름") ||
-                k.contains("[반품출력]기사님이름")
+                k.contains("[반품출력]기사님이름") || k.contains("성함입력")
         }
         func identityScore(_ position: Int, _ q: FormQuestion) -> Int {
             let k = key(q.title)
@@ -689,6 +689,7 @@ struct NumberingView: View {
             mobileEntry: numberingMobile?.entryID,
             mobileOptions: numberingMobile?.options ?? returnMobile?.options ?? [],
             returnIDEntry: returnID?.entryID,
+            returnIsName: returnID.map { key($0.title).contains("기사님이름") || key($0.title).contains("성함") } ?? false,
             returnMobileEntry: returnMobile?.entryID,
             returnMobileOptions: returnMobile?.options ?? []
         )
@@ -1048,6 +1049,7 @@ private struct GoogleFormDefinition {
     let mobileOptions: [String]
 
     let returnIDEntry: String?
+    let returnIsName: Bool
     let returnMobileEntry: String?
     let returnMobileOptions: [String]
 }
