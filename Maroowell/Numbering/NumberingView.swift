@@ -546,7 +546,7 @@ struct NumberingView: View {
                 }
             }
 
-            try await postGoogleForm(responseURL: form.responseURL, values: values, returnLabel: returnLabel, hasBranch: form.branchEntry != nil)
+            try await postGoogleForm(responseURL: form.responseURL, values: values, returnLabel: returnLabel, hasBranch: form.hasReturnBranch)
 
             let payload = NumberingInsertRow(
                 maroowellInfoID: ctx.infoID,
@@ -670,9 +670,10 @@ struct NumberingView: View {
         }?.element ?? mobiles.last { $0.element.entryID != numberingMobile?.entryID }?.element
         func isNumberingChoice(_ text: String) -> Bool { key(text).contains("채번") }
         func isReturnChoice(_ text: String) -> Bool { key(text).contains("반품") }
+        // Some required selectors have only a numbering choice.
         let branch = questions.first {
             $0.options.contains(where: isNumberingChoice) &&
-                $0.options.contains(where: isReturnChoice)
+                ($0.options.contains(where: isReturnChoice) || key($0.title).contains("요청"))
         }
         let branchNumberingValue = branch?.options.first(where: isNumberingChoice) ?? "채번 요청"
         let branchReturnValue = branch?.options.first(where: isReturnChoice) ?? "반품 송장 출력"
@@ -680,6 +681,7 @@ struct NumberingView: View {
         return GoogleFormDefinition(
             responseURL: formResponseURL(viewURL),
             branchEntry: branch?.entryID,
+            hasReturnBranch: branch?.options.contains(where: isReturnChoice) ?? false,
             branchNumberingValue: branchNumberingValue,
             branchReturnValue: branchReturnValue,
             waybillEntry: waybill?.entryID,
@@ -1040,6 +1042,7 @@ private struct FormQuestion {
 private struct GoogleFormDefinition {
     let responseURL: String
     let branchEntry: String?
+    let hasReturnBranch: Bool
     let branchNumberingValue: String
     let branchReturnValue: String
     let waybillEntry: String?
