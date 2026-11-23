@@ -546,7 +546,7 @@ struct NumberingView: View {
                 }
             }
 
-            try await postGoogleForm(responseURL: form.responseURL, values: values, returnLabel: returnLabel)
+            try await postGoogleForm(responseURL: form.responseURL, values: values, returnLabel: returnLabel, hasBranch: form.branchEntry != nil)
 
             let payload = NumberingInsertRow(
                 maroowellInfoID: ctx.infoID,
@@ -730,13 +730,14 @@ struct NumberingView: View {
     private func postGoogleForm(
         responseURL: String,
         values: [String: String],
-        returnLabel: Bool
+        returnLabel: Bool,
+        hasBranch: Bool
     ) async throws {
         guard let url = URL(string: responseURL) else {
             throw NumberingError.message("Google Form 제출 주소가 올바르지 않습니다.")
         }
 
-        let histories = returnLabel ? ["0,2", "0,1", "0"] : ["0,1", "0,2", "0"]
+        let histories = !hasBranch ? ["0"] : (returnLabel ? ["0,2", "0,1", "0"] : ["0,1", "0,2", "0"])
         var lastStatus = -1
         var lastBody = ""
 
