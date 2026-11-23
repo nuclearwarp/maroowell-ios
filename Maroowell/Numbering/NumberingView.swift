@@ -456,8 +456,13 @@ struct NumberingView: View {
 
     private func syncSelectedContext(returnLabel: Bool) {
         guard let ctx = currentContext, let form = forms[ctx.camp] else { return }
-        driverID = ctx.coupangID
+        driverID = (!returnLabel && form.driverIsName) ? ctx.driverName : ctx.coupangID
         let options = returnLabel ? form.returnMobileOptions : form.mobileOptions
+        let hasMobile = returnLabel ? form.returnMobileEntry != nil : form.mobileEntry != nil
+        if !hasMobile {
+            mobileCamp = ctx.deliveryLocation.isEmpty ? "본캠프" : ctx.deliveryLocation
+            return
+        }
         if let match = fuzzyMatch(ctx.deliveryLocation, options: options) {
             mobileCamp = options[match]
         } else {
@@ -469,6 +474,8 @@ struct NumberingView: View {
     private func currentMobileOptions(returnLabel: Bool) -> [String] {
         guard let ctx = currentContext, let form = forms[ctx.camp] else { return [] }
         let options = returnLabel ? form.returnMobileOptions : form.mobileOptions
+        let hasMobile = returnLabel ? form.returnMobileEntry != nil : form.mobileEntry != nil
+        if !hasMobile { return [mobileCamp.isEmpty ? "본캠프" : mobileCamp] }
         return mobileCamp.isEmpty ? [""] + options : options
     }
 
@@ -518,20 +525,18 @@ struct NumberingView: View {
                 if let entry = form.returnMobileEntry { values[entry] = mobileCamp }
             } else {
                 if let entry = form.waybillEntry { values[entry] = extractWaybill(waybill) }
-                if let entry = form.driverIDEntry { values[entry] = driverID }
+                if let entry = form.driverIDEntry { values[entry] = form.driverIsName ? ctx.driverName : driverID }
                 if let entry = form.quantityEntry { values[entry] = quantity }
                 if let entry = form.mobileEntry { values[entry] = mobileCamp }
             }
             // Google Forms may return HTTP 200 for partial responses. Validate
             // every required field *before* sending, never log partial success.
             if returnLabel {
-                guard form.branchEntry != nil,
-                      form.returnIDEntry != nil, form.returnMobileEntry != nil else {
-                    throw NumberingError.message("Google Form의 반품 요청 항목을 찾지 못했습니다. 캠프 설문을 확인하세요.")
+                guard form.returnIDEntry != nil else {
+                    throw NumberingError.message("Google Form의 반품 요청용 기사 정보 질문이 없습니다.")
                 }
             } else {
-                guard let branch = form.branchEntry, !branch.isEmpty,
-                      let bill = form.waybillEntry, !bill.isEmpty,
+                guard let bill = form.waybillEntry, !bill.isEmpty,
                       let count = form.quantityEntry, !count.isEmpty,
                       let driver = form.driverIDEntry, !driver.isEmpty,
                       !(values[bill] ?? "").isEmpty,
@@ -610,47 +615,67 @@ struct NumberingView: View {
             value.uppercased().replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
         }
 
-        // Support camp-specific Form labels, including "반품송장 붙여넣기"
-        // and "채번 필요 갯수", without hardcoding Google entry IDs.
+        // Map questions by their actual role and ordering, not by camp-specific IDs.
         let waybill = questions.first {
-            let value = key($0.title)
-            return value.contains("운송장번호") || value.contains("송장번호") ||
-                (value.contains("송장") &&
-                 (value.contains("붙여넣기") || value.contains("복사") || value.contains("입력")))
+            let k = key($0.title)
+            return k.contains("송장") && !k.contains("[반품출력]") &&
+                !k.contains("반송장출력") && !k.contains("송장출력요청하시는")
         }
         let quantityQuestion = questions.first {
-            let value = key($0.title)
-            return (value.contains("수량") || value.contains("갯수") || value.contains("개수")) &&
-                (value.contains("채번") || value.contains("송장"))
+            let k = key($0.title)
+            return k.contains("채번") &&
+                (k.contains("수량") || k.contains("갯수") || k.contains("개수"))
         }
-        let ids = questions.filter {
-            let value = key($0.title)
-            return value.contains("아이디") || value.contains("기사ID") || value.contains("COUPANGID")
+        let billPosition = waybill.flatMap { b in questions.firstIndex { $0.entryID == b.entryID } }
+        let qtyPosition = quantityQuestion.flatMap { q in questions.firstIndex { $0.entryID == q.entryID } }
+        func isIdentity(_ q: FormQuestion) -> Bool {
+            let k = key(q.title)
+            return k.contains("아이디") || k.contains("기사ID") ||
+                k.contains("기사님계정") || k.contains("[채번]기사님이름") ||
+                k.contains("[반품출력]기사님이름")
         }
-        let mobiles = questions.filter {
-            let value = key($0.title)
-            return (value.contains("모바일") && value.contains("캠프")) ||
-                value.contains("요청캠프") || value.contains("입차캠프")
+        func identityScore(_ position: Int, _ q: FormQuestion) -> Int {
+            let k = key(q.title)
+            return (k.contains("[채번]") ? 1200 : 0) -
+                (k.contains("[반품출력]") ? 1500 : 0) +
+                ((billPosition != nil && qtyPosition != nil && position > billPosition! && position < qtyPosition!) ? 800 : 0) +
+                ((billPosition != nil && position > billPosition!) ? 500 : 250) -
+                (billPosition.map { abs(position - $0) * 30 } ?? 0) +
+                (k.contains("기사님아이디") ? 100 : 0)
         }
-        // Form sections may have a return-camp question but no numbering-camp
-        // question. Keep these independent to prevent writing wrong sections.
-        let numberingMobile = mobiles.first { !key($0.title).contains("반품") }
-        let returnMobile = mobiles.first { key($0.title).contains("반품") }
-            ?? mobiles.dropFirst().first ?? mobiles.first
-        let branch = questions.first { question in
-            question.options.contains { key($0).contains("채번요청") } &&
-                question.options.contains {
-                    let value = key($0)
-                    return value.contains("반품송장") || value.contains("반품출력")
-                }
+        let identities = questions.enumerated().filter { isIdentity($0.element) }
+        let driverQuestion = identities.max { identityScore($0.offset, $0.element) < identityScore($1.offset, $1.element) }?.element
+        let driverIsName = driverQuestion.map { key($0.title).contains("기사님이름") } ?? false
+        let returnID = identities.first { key($0.element.title).contains("[반품출력]") }?.element ??
+            identities.last { $0.element.entryID != driverQuestion?.entryID }?.element
+        let mobiles = questions.enumerated().filter {
+            let k = key($0.element.title)
+            return k.contains("캠프") || k.contains("SITE")
         }
-        let branchNumberingValue = branch?.options.first {
-            key($0).contains("채번요청")
-        } ?? "채번 요청"
-        let branchReturnValue = branch?.options.first {
-            let value = key($0)
-            return value.contains("반품송장") || value.contains("반품출력")
-        } ?? "반품 송장 출력"
+        func mobileScore(_ position: Int, _ q: FormQuestion) -> Int {
+            let k = key(q.title)
+            return ((k.contains("반품") || k.contains("[반품출력]")) ? -1000 : 0) +
+                ((qtyPosition != nil && position > qtyPosition!) ? 700 : 0) +
+                ((billPosition != nil && position > billPosition!) ? 200 : 0) +
+                (k.contains("요청") ? 70 : 0) -
+                (qtyPosition.map { abs(position - $0) * 10 } ?? 0)
+        }
+        let numberingMobile = mobiles.filter {
+            let k = key($0.element.title)
+            return !k.contains("반품") && !k.contains("[반품출력]")
+        }.max { mobileScore($0.offset, $0.element) < mobileScore($1.offset, $1.element) }?.element
+        let returnMobile = mobiles.first {
+            let k = key($0.element.title)
+            return k.contains("반품") || k.contains("[반품출력]")
+        }?.element ?? mobiles.last { $0.element.entryID != numberingMobile?.entryID }?.element
+        func isNumberingChoice(_ text: String) -> Bool { key(text).contains("채번") }
+        func isReturnChoice(_ text: String) -> Bool { key(text).contains("반품") }
+        let branch = questions.first {
+            $0.options.contains(where: isNumberingChoice) &&
+                $0.options.contains(where: isReturnChoice)
+        }
+        let branchNumberingValue = branch?.options.first(where: isNumberingChoice) ?? "채번 요청"
+        let branchReturnValue = branch?.options.first(where: isReturnChoice) ?? "반품 송장 출력"
 
         return GoogleFormDefinition(
             responseURL: formResponseURL(viewURL),
@@ -658,11 +683,12 @@ struct NumberingView: View {
             branchNumberingValue: branchNumberingValue,
             branchReturnValue: branchReturnValue,
             waybillEntry: waybill?.entryID,
-            driverIDEntry: ids.first?.entryID,
+            driverIDEntry: driverQuestion?.entryID,
+            driverIsName: driverIsName,
             quantityEntry: quantityQuestion?.entryID,
             mobileEntry: numberingMobile?.entryID,
             mobileOptions: numberingMobile?.options ?? returnMobile?.options ?? [],
-            returnIDEntry: ids.dropFirst().first?.entryID ?? ids.first?.entryID,
+            returnIDEntry: returnID?.entryID,
             returnMobileEntry: returnMobile?.entryID,
             returnMobileOptions: returnMobile?.options ?? []
         )
@@ -1016,6 +1042,7 @@ private struct GoogleFormDefinition {
     let branchReturnValue: String
     let waybillEntry: String?
     let driverIDEntry: String?
+    let driverIsName: Bool
     let quantityEntry: String?
     let mobileEntry: String?
     let mobileOptions: [String]
