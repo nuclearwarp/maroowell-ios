@@ -807,33 +807,28 @@ struct NumberingView: View {
         guard !source.isEmpty, !options.isEmpty else { return nil }
         let key = fuzzyKey(source)
         let core = fuzzyCore(source)
-        var best: (index: Int, score: Int)?
-
-        for (index, option) in options.enumerated() {
+        guard !key.isEmpty, !core.isEmpty else { return nil }
+        let ranked: [(index: Int, score: Int)] = options.enumerated().map { index, option in
             let optionKey = fuzzyKey(option)
             let optionCore = fuzzyCore(option)
-            let prefix = commonPrefix(core, optionCore)
             let score: Int
             if !optionKey.isEmpty && optionKey == key {
                 score = 1000
             } else if !optionCore.isEmpty && optionCore == core {
                 score = 900
-            } else if !optionKey.isEmpty && (key.contains(optionKey) || optionKey.contains(key)) {
-
-                score = 700 + min(key.count, optionKey.count)
-            } else if optionCore.count >= 2 && core.count >= 2 &&
+            } else if min(key.count, optionKey.count) >= 4 &&
+                        (key.contains(optionKey) || optionKey.contains(key)) {
+                score = 700
+            } else if min(core.count, optionCore.count) >= 4 &&
                         (core.contains(optionCore) || optionCore.contains(core)) {
-                score = 600 + min(core.count, optionCore.count)
-            } else if prefix >= 2 {
-                score = 400 + prefix
+                score = 600
             } else {
                 score = 0
             }
-            if best == nil || score > best!.score {
-                best = (index, score)
-            }
-        }
-        guard let best, best.score >= 400 else { return nil }
+            return (index, score)
+        }.sorted { $0.score > $1.score }
+        guard let best = ranked.first, best.score >= 600,
+              !ranked.dropFirst().contains(where: { $0.score == best.score }) else { return nil }
         return best.index
     }
 
