@@ -525,7 +525,7 @@ struct NumberingView: View {
                 if let entry = form.returnMobileEntry { values[entry] = mobileCamp }
             } else {
                 if let entry = form.waybillEntry { values[entry] = extractWaybill(waybill) }
-                if let entry = form.driverIDEntry { values[entry] = form.driverIsName ? ctx.driverName : driverID }
+                if let entry = form.driverIDEntry { values[entry] = driverID }
                 if let entry = form.quantityEntry { values[entry] = quantity }
                 if let entry = form.mobileEntry { values[entry] = mobileCamp }
             }
@@ -551,7 +551,7 @@ struct NumberingView: View {
             let payload = NumberingInsertRow(
                 maroowellInfoID: ctx.infoID,
                 driverName: ctx.driverName,
-                coupangID: driverID,
+                coupangID: (!returnLabel && form.driverIsName) ? ctx.coupangID : driverID,
                 requestType: returnLabel ? "return_label" : "numbering",
                 waybillNo: returnLabel ? nil : extractWaybill(waybill),
                 quantity: returnLabel ? nil : Int(quantity),
