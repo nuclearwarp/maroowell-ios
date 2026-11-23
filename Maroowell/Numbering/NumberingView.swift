@@ -522,8 +522,23 @@ struct NumberingView: View {
                 if let entry = form.quantityEntry { values[entry] = quantity }
                 if let entry = form.mobileEntry { values[entry] = mobileCamp }
             }
-            guard !values.isEmpty else {
-                throw NumberingError.message("Google Form 질문 항목을 확인하지 못했습니다.")
+            // Google Forms may return HTTP 200 for partial responses. Validate
+            // every required field *before* sending, never log partial success.
+            if returnLabel {
+                guard form.branchEntry != nil,
+                      form.returnIDEntry != nil, form.returnMobileEntry != nil else {
+                    throw NumberingError.message("Google Form의 반품 요청 항목을 찾지 못했습니다. 캠프 설문을 확인하세요.")
+                }
+            } else {
+                guard let branch = form.branchEntry, !branch.isEmpty,
+                      let bill = form.waybillEntry, !bill.isEmpty,
+                      let count = form.quantityEntry, !count.isEmpty,
+                      let driver = form.driverIDEntry, !driver.isEmpty,
+                      !(values[bill] ?? "").isEmpty,
+                      !(values[count] ?? "").isEmpty,
+                      !(values[driver] ?? "").isEmpty else {
+                    throw NumberingError.message("Google Form의 운송장번호·채번 수량·기사 ID 매핑이 불완전해 제출을 중단했습니다.")
+                }
             }
 
             try await postGoogleForm(responseURL: form.responseURL, values: values, returnLabel: returnLabel)
@@ -595,13 +610,18 @@ struct NumberingView: View {
             value.uppercased().replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
         }
 
+        // Support camp-specific Form labels, including "반품송장 붙여넣기"
+        // and "채번 필요 갯수", without hardcoding Google entry IDs.
         let waybill = questions.first {
             let value = key($0.title)
-            return value.contains("운송장번호") || value.contains("송장번호")
+            return value.contains("운송장번호") || value.contains("송장번호") ||
+                (value.contains("송장") &&
+                 (value.contains("붙여넣기") || value.contains("복사") || value.contains("입력")))
         }
         let quantityQuestion = questions.first {
             let value = key($0.title)
-            return value.contains("수량") && (value.contains("채번") || value.contains("송장"))
+            return (value.contains("수량") || value.contains("갯수") || value.contains("개수")) &&
+                (value.contains("채번") || value.contains("송장"))
         }
         let ids = questions.filter {
             let value = key($0.title)
@@ -612,6 +632,11 @@ struct NumberingView: View {
             return (value.contains("모바일") && value.contains("캠프")) ||
                 value.contains("요청캠프") || value.contains("입차캠프")
         }
+        // Form sections may have a return-camp question but no numbering-camp
+        // question. Keep these independent to prevent writing wrong sections.
+        let numberingMobile = mobiles.first { !key($0.title).contains("반품") }
+        let returnMobile = mobiles.first { key($0.title).contains("반품") }
+            ?? mobiles.dropFirst().first ?? mobiles.first
         let branch = questions.first { question in
             question.options.contains { key($0).contains("채번요청") } &&
                 question.options.contains {
@@ -635,11 +660,11 @@ struct NumberingView: View {
             waybillEntry: waybill?.entryID,
             driverIDEntry: ids.first?.entryID,
             quantityEntry: quantityQuestion?.entryID,
-            mobileEntry: mobiles.first?.entryID,
-            mobileOptions: mobiles.first?.options ?? [],
+            mobileEntry: numberingMobile?.entryID,
+            mobileOptions: numberingMobile?.options ?? returnMobile?.options ?? [],
             returnIDEntry: ids.dropFirst().first?.entryID ?? ids.first?.entryID,
-            returnMobileEntry: mobiles.dropFirst().first?.entryID ?? mobiles.first?.entryID,
-            returnMobileOptions: mobiles.dropFirst().first?.options ?? mobiles.first?.options ?? []
+            returnMobileEntry: returnMobile?.entryID,
+            returnMobileOptions: returnMobile?.options ?? []
         )
     }
 
