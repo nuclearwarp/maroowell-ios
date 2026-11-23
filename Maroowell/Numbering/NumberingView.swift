@@ -398,11 +398,14 @@ struct NumberingView: View {
 
         do {
             var loaded: [String: GoogleFormDefinition] = [:]
-            for group in Dictionary(grouping: contexts, by: \.camp) {
-                guard let rawURL = group.value.first(where: { !$0.numberingURL.isEmpty })?.numberingURL else {
-                    throw NumberingError.message("\(group.key) 캠프의 채번 URL이 없습니다.")
+            for ctx in contexts {
+                let rawURL = ctx.numberingURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !rawURL.isEmpty else {
+                    throw NumberingError.message("\(ctx.camp) 캠프의 채번 URL이 없습니다.")
                 }
-                loaded[group.key] = try await loadGoogleForm(rawURL)
+                if loaded[rawURL] == nil {
+                    loaded[rawURL] = try await loadGoogleForm(rawURL)
+                }
             }
             forms = loaded
             waybill = ""
@@ -455,7 +458,7 @@ struct NumberingView: View {
     }
 
     private func syncSelectedContext(returnLabel: Bool) {
-        guard let ctx = currentContext, let form = forms[ctx.camp] else { return }
+        guard let ctx = currentContext, let form = forms[ctx.numberingURL] else { return }
         driverID = ((returnLabel && form.returnIsName) || (!returnLabel && form.driverIsName)) ? ctx.driverName : ctx.coupangID
         let options = returnLabel ? form.returnMobileOptions : form.mobileOptions
         let hasMobile = returnLabel ? form.returnMobileEntry != nil : form.mobileEntry != nil
@@ -472,7 +475,7 @@ struct NumberingView: View {
     }
 
     private func currentMobileOptions(returnLabel: Bool) -> [String] {
-        guard let ctx = currentContext, let form = forms[ctx.camp] else { return [] }
+        guard let ctx = currentContext, let form = forms[ctx.numberingURL] else { return [] }
         let options = returnLabel ? form.returnMobileOptions : form.mobileOptions
         let hasMobile = returnLabel ? form.returnMobileEntry != nil : form.mobileEntry != nil
         if !hasMobile { return [mobileCamp.isEmpty ? "본캠프" : mobileCamp] }
@@ -510,7 +513,7 @@ struct NumberingView: View {
     }
 
     private func submitCurrentRequest() async {
-        guard let ctx = currentContext, let form = forms[ctx.camp] else { return }
+        guard let ctx = currentContext, let form = forms[ctx.numberingURL] else { return }
         let returnLabel = mode == .returnLabel
         isLoading = true
         defer { isLoading = false }
